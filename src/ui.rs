@@ -9,17 +9,13 @@ use helper::AccountData;
 use lazy_static::lazy_static;
 use std::borrow::Cow;
 use std::io::{stdout, Stdout, Write};
-use std::iter::IntoIterator;
 use std::sync::Mutex;
 use tui::{
     backend::{self, CrosstermBackend},
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Direction, Layout},
     style::{Color, Style},
     terminal::Frame,
-    widgets::{
-        canvas::{Canvas, Points},
-        Block, Borders, List, Paragraph, Text,
-    },
+    widgets::{Block, Borders, Paragraph, Text},
     Terminal,
 };
 
@@ -33,7 +29,9 @@ pub fn init_ui() -> Result<(Terminal<CrosstermBackend<Stdout>>, AccountData)> {
     let mut terminal = Terminal::new(backend).expect("Can't create a terminal");
     terminal.hide_cursor().expect("Can't hide a cursor");
 
-    let save_name = dirs::home_dir().ok_or(anyhow!("Can't get home directory path"))?.join(SAVE_FILE_NAME);
+    let save_name = dirs::home_dir()
+        .ok_or(anyhow!("Can't get home directory path"))?
+        .join(SAVE_FILE_NAME);
     let error;
     let data;
     match helper::load_account_data(&save_name) {
@@ -122,7 +120,9 @@ pub fn ui_loop<T: backend::Backend>(
             Mutex::new(clipboard::ClipboardProvider::new().unwrap());
     }
 
-    let save_name = dirs::home_dir().ok_or(anyhow!("Can't get home directory path"))?.join(SAVE_FILE_NAME);
+    let save_name = dirs::home_dir()
+        .ok_or(anyhow!("Can't get home directory path"))?
+        .join(SAVE_FILE_NAME);
     let mut state = State::Show;
     let mut error = String::new();
     while let Ok(e) = event::read() {

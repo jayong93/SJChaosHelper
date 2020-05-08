@@ -4,7 +4,7 @@ use winapi::um::wingdi::{self, RGB};
 use winapi::um::winuser;
 use winit::{
     dpi::{LogicalPosition, PhysicalSize},
-    event::{DeviceEvent, Event, ModifiersState, VirtualKeyCode, WindowEvent},
+    event::{DeviceEvent, Event, VirtualKeyCode, WindowEvent},
     event_loop::{EventLoopProxy, EventLoopWindowTarget},
     platform::windows::{EventLoopExtWindows, WindowExtWindows},
     *,
