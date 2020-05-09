@@ -123,7 +123,7 @@ fn main() -> Result<()> {
                                 helper::ItemType::Body,
                                 helper::ItemType::Helmet,
                                 helper::ItemType::Gloves,
-                                helper::ItemType::Body,
+                                helper::ItemType::Belt,
                                 helper::ItemType::Boots,
                                 helper::ItemType::Ring,
                                 helper::ItemType::Amulet,
