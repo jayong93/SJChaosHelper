@@ -109,109 +109,134 @@ enum State {
     Edit(Field),
 }
 
+enum ChaosEvent {
+    TUIEvent(CEvent),
+    Error(Result<()>),
+}
+
 use helper;
 pub fn ui_loop<T: backend::Backend>(
     terminal: &mut Terminal<T>,
     mut account_data: AccountData,
     loop_proxy: crate::EventLoopProxy<helper::ResponseFromNetwork>,
+    err_recv: std::sync::mpsc::Receiver<Result<()>>,
 ) -> Result<()> {
     lazy_static! {
         static ref CLIPBOARD: Mutex<clipboard::ClipboardContext> =
             Mutex::new(clipboard::ClipboardProvider::new().unwrap());
     }
 
+    let (event_send, event_recv) = std::sync::mpsc::channel();
+    {
+        let event_send = event_send.clone();
+        std::thread::spawn(move || event_send.send(ChaosEvent::Error(err_recv.recv().unwrap())));
+    }
+    std::thread::spawn(move || {
+        while let Ok(e) = event::read() {
+            if let Err(_) = event_send.send(ChaosEvent::TUIEvent(e)) {
+                break;
+            }
+        }
+    });
+
     let save_name = dirs::home_dir()
         .ok_or(anyhow!("Can't get home directory path"))?
         .join(SAVE_FILE_NAME);
     let mut state = State::Show;
     let mut error = String::new();
-    while let Ok(e) = event::read() {
-        match e {
-            CEvent::Key(KeyEvent {
-                code: KeyCode::Char(key),
-                modifiers,
-            }) => match &mut state {
-                State::Show if key == 'e' => {
-                    state = State::SelectToEdit;
-                }
-                State::Show if key == 'r' => {
-                    helper::set_account(account_data.clone());
-                    match helper::acquire_chaos_list(true) {
-                        Ok(result) => {
-                            loop_proxy.send_event(result)?;
-                            error.clear();
+    for ce in event_recv.iter() {
+        match ce {
+            ChaosEvent::TUIEvent(e) => match e {
+                CEvent::Key(KeyEvent {
+                    code: KeyCode::Char(key),
+                    modifiers,
+                }) => match &mut state {
+                    State::Show if key == 'e' => {
+                        state = State::SelectToEdit;
+                    }
+                    State::Show if key == 'r' => {
+                        helper::set_account(account_data.clone());
+                        match helper::acquire_chaos_list(true) {
+                            Ok(result) => {
+                                loop_proxy.send_event(result)?;
+                                error.clear();
+                            }
+                            Err(e) => error = e.to_string(),
                         }
-                        Err(e) => error = e.to_string(),
+                    }
+                    State::Show if key == 's' => {
+                        if let Err(e) = helper::save_account_data(&save_name, &account_data) {
+                            error = e.to_string();
+                        } else {
+                            error = "Save has been completed".to_string();
+                        }
+                    }
+                    State::Show if key == 'q' => {
+                        break;
+                    }
+                    State::SelectToEdit if key == '1' => {
+                        state = State::Edit(Field::Account(String::new()));
+                    }
+                    State::SelectToEdit if key == '2' => {
+                        state = State::Edit(Field::Cookie(String::new()));
+                    }
+                    State::SelectToEdit if key == '3' => {
+                        state = State::Edit(Field::League(String::new()));
+                    }
+                    State::SelectToEdit if key == '4' => {
+                        state = State::Edit(Field::TabIdx(None));
+                    }
+                    State::Edit(field) => {
+                        if key == 'v' && modifiers == KeyModifiers::CONTROL {
+                            if let Ok(clip) = CLIPBOARD.lock().unwrap().get_contents() {
+                                for ch in clip.chars() {
+                                    field.handle_input(ch);
+                                }
+                            }
+                        } else {
+                            field.handle_input(key);
+                        }
+                    }
+                    _ => {}
+                },
+                CEvent::Key(KeyEvent {
+                    code: KeyCode::Backspace,
+                    ..
+                }) => {
+                    if let State::Edit(f) = &mut state {
+                        f.erase();
                     }
                 }
-                State::Show if key == 's' => {
-                    if let Err(e) = helper::save_account_data(&save_name, &account_data) {
-                        error = e.to_string();
-                    } else {
-                        error = "Save has been completed".to_string();
+                CEvent::Key(KeyEvent { code, .. }) => match state {
+                    _ if code == KeyCode::Esc => {
+                        state = State::Show;
                     }
-                }
-                State::Show if key == 'q' => {
-                    break;
-                }
-                State::SelectToEdit if key == '1' => {
-                    state = State::Edit(Field::Account(String::new()));
-                }
-                State::SelectToEdit if key == '2' => {
-                    state = State::Edit(Field::Cookie(String::new()));
-                }
-                State::SelectToEdit if key == '3' => {
-                    state = State::Edit(Field::League(String::new()));
-                }
-                State::SelectToEdit if key == '4' => {
-                    state = State::Edit(Field::TabIdx(None));
-                }
-                State::Edit(field) => {
-                    if key == 'v' && modifiers == KeyModifiers::CONTROL {
-                        if let Ok(clip) = CLIPBOARD.lock().unwrap().get_contents() {
-                            for ch in clip.chars() {
-                                field.handle_input(ch);
+                    State::Edit(f) if code == KeyCode::Enter => {
+                        match f {
+                            Field::Account(s) => {
+                                account_data.account = s;
+                            }
+                            Field::Cookie(s) => {
+                                account_data.cookie = s;
+                            }
+                            Field::League(s) => {
+                                account_data.league = s;
+                            }
+                            Field::TabIdx(i) => {
+                                if let Some(idx) = i {
+                                    account_data.tab_idx = idx as usize;
+                                }
                             }
                         }
-                    } else {
-                        field.handle_input(key);
+                        state = State::Show;
                     }
-                }
+                    _ => {}
+                },
                 _ => {}
             },
-            CEvent::Key(KeyEvent {
-                code: KeyCode::Backspace,
-                ..
-            }) => {
-                if let State::Edit(f) = &mut state {
-                    f.erase();
-                }
+            ChaosEvent::Error(Err(err)) => {
+                error = err.to_string();
             }
-            CEvent::Key(KeyEvent { code, .. }) => match state {
-                _ if code == KeyCode::Esc => {
-                    state = State::Show;
-                }
-                State::Edit(f) if code == KeyCode::Enter => {
-                    match f {
-                        Field::Account(s) => {
-                            account_data.account = s;
-                        }
-                        Field::Cookie(s) => {
-                            account_data.cookie = s;
-                        }
-                        Field::League(s) => {
-                            account_data.league = s;
-                        }
-                        Field::TabIdx(i) => {
-                            if let Some(idx) = i {
-                                account_data.tab_idx = idx as usize;
-                            }
-                        }
-                    }
-                    state = State::Show;
-                }
-                _ => {}
-            },
             _ => {}
         }
         terminal.draw(|mut f| {

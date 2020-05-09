@@ -67,7 +67,8 @@ fn main() -> Result<()> {
     helper::init_module();
 
     let (tx, rx) = std::sync::mpsc::channel::<EventLoopProxy<helper::ResponseFromNetwork>>();
-    std::thread::spawn(move || -> Result<()> {
+    let (err_send, err_recv) = std::sync::mpsc::channel::<Result<()>>();
+    let handle = std::thread::spawn(move || -> Result<()> {
         let event_loop = event_loop::EventLoop::new_any_thread();
         let loop_proxy = event_loop.create_proxy();
         tx.send(loop_proxy.clone()).unwrap();
@@ -76,6 +77,7 @@ fn main() -> Result<()> {
             .with_resizable(false)
             .with_visible(false)
             .build(&event_loop)?;
+
         main_window.set_outer_position(LogicalPosition::new(STASH_POS.0, STASH_POS.1));
         let main_hwnd = main_window.hwnd() as *mut HWND__;
         let mut main_rect = RECT {
@@ -262,12 +264,20 @@ fn main() -> Result<()> {
         })
     });
 
+    std::thread::spawn(move || {
+        err_send.send(
+            handle
+                .join()
+                .unwrap_or(Err(anyhow::anyhow!("ui thread has been crashed"))),
+        )
+    });
+
     let loop_proxy = rx.recv()?;
 
     let result = ui::init_ui();
     match result {
         Ok((mut terminal, account_data)) => {
-            let result = ui::ui_loop(&mut terminal, account_data, loop_proxy);
+            let result = ui::ui_loop(&mut terminal, account_data, loop_proxy, err_recv);
             ui::close_ui(&mut terminal);
             result
         }
