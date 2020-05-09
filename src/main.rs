@@ -1,11 +1,10 @@
 use anyhow::Result;
 use winapi::shared::minwindef::FALSE;
-use winapi::shared::ntdef::NULL;
 use winapi::shared::windef::{HWND__, RECT};
 use winapi::um::wingdi::{self, RGB};
 use winapi::um::winuser;
 use winit::{
-    dpi::{LogicalPosition, PhysicalSize},
+    dpi::LogicalPosition,
     event::{DeviceEvent, Event, VirtualKeyCode, WindowEvent},
     event_loop::{EventLoopProxy, EventLoopWindowTarget},
     platform::windows::{EventLoopExtWindows, WindowExtWindows},
@@ -104,6 +103,7 @@ fn main() -> Result<()> {
                 winuser::SWP_NOMOVE,
             );
         }
+        set_window_transparent(main_hwnd);
 
         let mut key_map = std::collections::HashMap::new();
 
@@ -154,7 +154,7 @@ fn main() -> Result<()> {
                     }
                 }
                 Event::UserEvent(e) => {
-                    set_window_transparent(main_hwnd);
+                    show_window(main_hwnd);
                     match e {
                         helper::ResponseFromNetwork::StashStatus((recipe_map, chaos_num)) => {
                             let types = [
@@ -293,6 +293,11 @@ fn set_window_transparent(hwnd: *mut HWND__) {
                 | winuser::WS_SYSMENU as i32
                 | winuser::WS_CAPTION as i32);
         winuser::SetWindowLongA(hwnd, winuser::GWL_STYLE, main_style);
+    }
+}
+
+fn show_window(hwnd: *mut HWND__) {
+    unsafe {
         winuser::ShowWindow(hwnd, winuser::SW_SHOWNA);
     }
 }
