@@ -48,7 +48,7 @@ fn main() -> Result<()> {
             .with_always_on_top(true)
             .with_resizable(false)
             .with_visible(false)
-            .with_inner_size(PhysicalSize::new(650 - 16, 795 - 160))
+            .with_inner_size(PhysicalSize::new(650 - 32, 795 - 200))
             .build(&event_loop)?;
         main_window.set_outer_position(LogicalPosition::new(16, 160));
         let main_hwnd = main_window.hwnd() as *mut HWND__;
