@@ -1,4 +1,6 @@
 use anyhow::Result;
+use winapi::shared::minwindef::FALSE;
+use winapi::shared::ntdef::NULL;
 use winapi::shared::windef::{HWND__, RECT};
 use winapi::um::wingdi::{self, RGB};
 use winapi::um::winuser;
@@ -14,29 +16,56 @@ mod ui;
 
 const QUAD_SIZE: u32 = 24;
 const NORMAL_SIZE: u32 = 12;
+const STASH_SIZE: (u32, u32) = (632, 632);
+const STASH_POS: (u32, u32) = (17, 162);
 
-fn make_child_window(
-    main_window: &window::Window,
-    width: u32,
-    height: u32,
-    event_loop: &EventLoopWindowTarget<helper::ResponseFromNetwork>,
-) -> Result<window::Window> {
-    let child = window::WindowBuilder::new()
-        .with_decorations(false)
-        .with_resizable(false)
-        .with_visible(true)
-        .with_inner_size(PhysicalSize::new(width, height))
-        .build(&event_loop)?;
+struct StashCell {
+    x: u32,
+    y: u32,
+    w: u32,
+    h: u32,
+}
 
-    let main_hwnd = main_window.hwnd() as *mut HWND__;
-    unsafe {
-        winuser::SetParent(child.hwnd() as _, main_hwnd);
+fn get_cell_size(i: u32) -> u32 {
+    if i % 3 == 2 {
+        27
+    } else {
+        26
     }
-    child.set_outer_position(LogicalPosition::new(0, 0));
-    Ok(child)
+}
+
+fn get_cell_pos_width(
+    mut x: u32,
+    mut y: u32,
+    mut w: u32,
+    mut h: u32,
+    is_quad_stash: bool,
+) -> StashCell {
+    if !is_quad_stash {
+        x *= 2;
+        y *= 2;
+        w *= 2;
+        h *= 2;
+    }
+    let out_x = (0..x).map(|i| get_cell_size(i)).fold(0, |sum, w| sum + w);
+    let out_y = (0..y).map(|i| get_cell_size(i)).fold(0, |sum, h| sum + h);
+    let out_w = (x..(x + w))
+        .map(|i| get_cell_size(i))
+        .fold(0, |sum, w| sum + w);
+    let out_h = (y..(y + h))
+        .map(|i| get_cell_size(i))
+        .fold(0, |sum, h| sum + h);
+    StashCell {
+        x: out_x,
+        y: out_y,
+        w: out_w,
+        h: out_h,
+    }
 }
 
 fn main() -> Result<()> {
+    use std::ffi::OsString;
+    use std::os::windows::ffi::OsStrExt;
     helper::init_module();
 
     let (tx, rx) = std::sync::mpsc::channel::<EventLoopProxy<helper::ResponseFromNetwork>>();
@@ -48,18 +77,37 @@ fn main() -> Result<()> {
             .with_always_on_top(true)
             .with_resizable(false)
             .with_visible(false)
-            .with_inner_size(PhysicalSize::new(650 - 32, 795 - 200))
             .build(&event_loop)?;
-        main_window.set_outer_position(LogicalPosition::new(16, 160));
+        main_window.set_outer_position(LogicalPosition::new(STASH_POS.0, STASH_POS.1));
         let main_hwnd = main_window.hwnd() as *mut HWND__;
-        let mut main_rect = RECT::default();
+        let mut main_rect = RECT {
+            top: 0,
+            left: 0,
+            bottom: STASH_SIZE.1 as _,
+            right: STASH_SIZE.0 as _,
+        };
         unsafe {
-            winuser::GetClientRect(main_hwnd, &mut main_rect);
+            let style = winuser::GetWindowLongA(main_hwnd, winuser::GWL_STYLE);
+            let main_style = style
+                & !(winuser::WS_OVERLAPPED as i32
+                    | winuser::WS_SYSMENU as i32
+                    | winuser::WS_CAPTION as i32);
+            winuser::SetWindowLongA(main_hwnd, winuser::GWL_STYLE, main_style);
+            winuser::AdjustWindowRect(&mut main_rect, main_style as _, FALSE);
+            winuser::SetWindowPos(
+                main_hwnd,
+                winuser::HWND_TOPMOST as _,
+                0,
+                0,
+                main_rect.right - main_rect.left,
+                main_rect.bottom - main_rect.top,
+                winuser::SWP_NOMOVE,
+            );
         }
 
-        let mut child_map = std::collections::HashMap::new();
+        let mut key_map = std::collections::HashMap::new();
 
-        event_loop.run(move |event, loop_ref, control_flow| {
+        event_loop.run(move |event, _, control_flow| {
             *control_flow = event_loop::ControlFlow::Wait;
 
             match event {
@@ -69,54 +117,46 @@ fn main() -> Result<()> {
                 } if window_id == main_window.id() => {
                     *control_flow = event_loop::ControlFlow::Exit;
                 }
-                Event::RedrawRequested(id) if id != main_window.id() => unsafe {
-                    let mut rect = RECT::default();
-                    let mut ps = winuser::PAINTSTRUCT::default();
-                    let child: &window::Window = child_map.get(&id).unwrap();
-                    let child_hwnd = child.hwnd() as _;
-                    let child_dc = winuser::BeginPaint(child_hwnd, &mut ps as _);
-                    winuser::GetClientRect(child_hwnd, &mut rect);
-                    let brush = wingdi::CreateSolidBrush(RGB(0, 255, 0));
-                    winuser::FillRect(child_dc, &rect, brush);
-                    wingdi::DeleteObject(brush as _);
-                    winuser::EndPaint(child_hwnd, &ps);
-                },
                 Event::DeviceEvent {
                     event: DeviceEvent::Key(key_event),
                     ..
-                } => match key_event.virtual_keycode {
-                    _ if !key_event.modifiers.ctrl() || !key_event.modifiers.shift() => {}
-                    Some(VirtualKeyCode::F9) => {
-                        if let Ok(result) = helper::acquire_chaos_list(false) {
-                            loop_proxy.send_event(result).ok();
+                } => {
+                    if let Some(code) = key_event.virtual_keycode {
+                        let is_pressed = key_map.entry(code).or_insert(false);
+                        *is_pressed = !*is_pressed;
+
+                        if *is_pressed {
+                            return;
                         }
+                    } else {
+                        return;
                     }
-                    Some(VirtualKeyCode::F10) => unsafe {
-                        winuser::ShowWindow(main_hwnd, winuser::SW_HIDE);
-                    },
-                    Some(VirtualKeyCode::F11) => {
-                        if let Ok(result) = helper::acquire_chaos_list(true) {
-                            loop_proxy.send_event(result).ok();
+
+                    match key_event.virtual_keycode {
+                        _ if !key_event.modifiers.ctrl() || !key_event.modifiers.shift() => {}
+                        Some(VirtualKeyCode::F9) => {
+                            if let Ok(result) = helper::acquire_chaos_list(false) {
+                                loop_proxy.send_event(result).ok();
+                            }
                         }
+                        Some(VirtualKeyCode::F10) => unsafe {
+                            winuser::ShowWindow(main_hwnd, winuser::SW_HIDE);
+                        },
+                        Some(VirtualKeyCode::F11) => {
+                            if let Ok(result) = helper::acquire_chaos_list(true) {
+                                loop_proxy.send_event(result).ok();
+                            }
+                        }
+                        Some(VirtualKeyCode::F12) => unsafe {
+                            winuser::ShowWindow(main_hwnd, winuser::SW_HIDE);
+                        },
+                        _ => {}
                     }
-                    Some(VirtualKeyCode::F12) => unsafe {
-                        winuser::ShowWindow(main_hwnd, winuser::SW_HIDE);
-                    },
-                    _ => {}
-                },
+                }
                 Event::UserEvent(e) => {
+                    set_window_transparent(main_hwnd);
                     match e {
                         helper::ResponseFromNetwork::StashStatus((recipe_map, chaos_num)) => {
-                            use std::ffi::OsString;
-                            use std::os::windows::ffi::OsStrExt;
-
-                            for child in child_map.values() {
-                                let child_hwnd = child.hwnd() as _;
-                                unsafe {
-                                    winuser::ShowWindow(child_hwnd, winuser::SW_HIDE);
-                                }
-                            }
-
                             let types = [
                                 helper::ItemType::Weapon1HOrShield,
                                 helper::ItemType::Weapon2H,
@@ -163,60 +203,54 @@ fn main() -> Result<()> {
                             }
                         }
                         helper::ResponseFromNetwork::ChaosRecipe((chaos_recipe, is_quad_stash)) => {
+                            let main_dc;
                             unsafe {
-                                let main_dc = winuser::GetDC(main_hwnd);
-                                let white_brush =
-                                    wingdi::GetStockObject(wingdi::WHITE_BRUSH as i32);
+                                main_dc = winuser::GetDC(main_hwnd);
+                                let white_brush = wingdi::GetStockObject(wingdi::WHITE_BRUSH as _);
                                 winuser::FillRect(main_dc, &main_rect, white_brush as _);
-                                winuser::ReleaseDC(main_hwnd, main_dc);
                             }
 
                             if chaos_recipe.is_empty() {
-                                for child in child_map.values() {
-                                    let child_hwnd = child.hwnd() as _;
-                                    unsafe {
-                                        winuser::ShowWindow(child_hwnd, winuser::SW_HIDE);
-                                    }
+                                let text = OsString::from("카오스 레시피가 없습니다")
+                                    .encode_wide()
+                                    .collect::<Vec<_>>();
+                                unsafe {
+                                    winuser::DrawTextW(
+                                        main_dc,
+                                        text.as_ptr(),
+                                        text.len() as _,
+                                        &mut main_rect,
+                                        winuser::DT_CENTER
+                                            | winuser::DT_VCENTER
+                                            | winuser::DT_SINGLELINE,
+                                    );
                                 }
-                            }
-
-                            let main_size = main_window.inner_size();
-                            let child_size = if is_quad_stash {
-                                (main_size.width / QUAD_SIZE, main_size.height / QUAD_SIZE)
                             } else {
-                                (
-                                    main_size.width / NORMAL_SIZE,
-                                    main_size.height / NORMAL_SIZE,
-                                )
-                            };
+                                unsafe {
+                                    let brush = wingdi::CreateSolidBrush(RGB(0, 255, 0));
 
-                            if chaos_recipe.len() > child_map.len() {
-                                if let Ok(child) = make_child_window(
-                                    &main_window,
-                                    child_size.0,
-                                    child_size.1,
-                                    loop_ref,
-                                ) {
-                                    child_map.insert(child.id(), child);
+                                    for recipe in chaos_recipe.iter() {
+                                        let (x, y) = (recipe.x as u32, recipe.y as u32);
+                                        let (w, h) = (recipe.w as u32, recipe.h as u32);
+
+                                        let cell = get_cell_pos_width(x, y, w, h, is_quad_stash);
+
+                                        let rect = RECT {
+                                            left: cell.x as _,
+                                            top: cell.y as _,
+                                            right: (cell.x + cell.w) as _,
+                                            bottom: (cell.y + cell.h) as _,
+                                        };
+                                        winuser::FillRect(main_dc, &rect, brush);
+                                    }
+                                    wingdi::DeleteObject(brush as _);
                                 }
                             }
-
-                            for (recipe, child) in chaos_recipe.iter().zip(child_map.values()) {
-                                let (x, y) = (recipe.x as u32, recipe.y as u32);
-                                let (w, h) = (recipe.w as u32, recipe.h as u32);
-                                child.set_inner_size(PhysicalSize::new(
-                                    w * child_size.0,
-                                    h * child_size.1,
-                                ));
-                                child.set_outer_position(LogicalPosition::new(
-                                    x * child_size.0,
-                                    y * child_size.1,
-                                ));
-                                child.set_visible(true);
+                            unsafe {
+                                winuser::ReleaseDC(main_hwnd, main_dc);
                             }
                         }
                     }
-                    set_window_transparent(main_hwnd);
                 }
                 _ => {}
             }
@@ -247,16 +281,13 @@ fn set_window_transparent(hwnd: *mut HWND__) {
                 | winuser::WS_EX_TRANSPARENT as i32
                 | winuser::WS_EX_TOOLWINDOW as i32,
         );
-        let style = winuser::GetWindowLongA(hwnd, winuser::GWL_STYLE);
         winuser::SetLayeredWindowAttributes(hwnd, 0, 175, winuser::LWA_ALPHA);
-        winuser::SetWindowLongA(
-            hwnd,
-            winuser::GWL_STYLE,
-            style
-                & !(winuser::WS_OVERLAPPED as i32
-                    | winuser::WS_SYSMENU as i32
-                    | winuser::WS_CAPTION as i32),
-        );
+        let style = winuser::GetWindowLongA(hwnd, winuser::GWL_STYLE);
+        let main_style = style
+            & !(winuser::WS_OVERLAPPED as i32
+                | winuser::WS_SYSMENU as i32
+                | winuser::WS_CAPTION as i32);
+        winuser::SetWindowLongA(hwnd, winuser::GWL_STYLE, main_style);
         winuser::ShowWindow(hwnd, winuser::SW_SHOWNA);
     }
 }

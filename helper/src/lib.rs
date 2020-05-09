@@ -286,10 +286,10 @@ fn network_thread_func(recv: mpsc::Receiver<InternalMessage>) -> impl FnOnce() -
         let mut chaos_queue: VecDeque<Vec<Item>> = ChaosListGenerator::new(&map).collect();
         let mut total_count = chaos_queue.len();
 
-        let is_quad_stash = IS_QUAD_STASH.load(Ordering::Relaxed);
         for msg in recv.iter() {
             in_send.try_send(()).ok();
             let recv_result = data_recv.try_iter().last();
+            let is_quad_stash = IS_QUAD_STASH.load(Ordering::Relaxed);
             match msg {
                 InternalMessage::RequestChaosRecipe(sender) => match recv_result {
                     Some(Ok(new_map)) => {
