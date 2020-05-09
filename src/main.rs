@@ -1,20 +1,19 @@
 use anyhow::Result;
 use winapi::shared::minwindef::FALSE;
+use winapi::shared::ntdef::NULL;
 use winapi::shared::windef::{HWND__, RECT};
 use winapi::um::wingdi::{self, RGB};
 use winapi::um::winuser;
 use winit::{
     dpi::LogicalPosition,
     event::{DeviceEvent, Event, VirtualKeyCode, WindowEvent},
-    event_loop::{EventLoopProxy, EventLoopWindowTarget},
+    event_loop::EventLoopProxy,
     platform::windows::{EventLoopExtWindows, WindowExtWindows},
     *,
 };
 
 mod ui;
 
-const QUAD_SIZE: u32 = 24;
-const NORMAL_SIZE: u32 = 12;
 const STASH_SIZE: (u32, u32) = (632, 632);
 const STASH_POS: (u32, u32) = (17, 162);
 
@@ -95,15 +94,18 @@ fn main() -> Result<()> {
             winuser::AdjustWindowRect(&mut main_rect, main_style as _, FALSE);
             winuser::SetWindowPos(
                 main_hwnd,
-                winuser::HWND_TOPMOST as _,
+                NULL as _,
                 0,
                 0,
                 main_rect.right - main_rect.left,
                 main_rect.bottom - main_rect.top,
-                winuser::SWP_NOMOVE,
+                winuser::SWP_NOMOVE
+                    | winuser::SWP_NOACTIVATE
+                    | winuser::SWP_NOZORDER
+                    | winuser::SWP_NOOWNERZORDER,
             );
         }
-        set_window_transparent(main_hwnd);
+        set_main_window_style(main_hwnd);
 
         let mut key_map = std::collections::HashMap::new();
 
@@ -157,6 +159,7 @@ fn main() -> Result<()> {
                     show_window(main_hwnd);
                     match e {
                         helper::ResponseFromNetwork::StashStatus((recipe_map, chaos_num)) => {
+                            toggle_window_transparent(main_hwnd, true);
                             let types = [
                                 helper::ItemType::Weapon1HOrShield,
                                 helper::ItemType::Weapon2H,
@@ -211,6 +214,7 @@ fn main() -> Result<()> {
                             }
 
                             if chaos_recipe.is_empty() {
+                                toggle_window_transparent(main_hwnd, true);
                                 let text = OsString::from("카오스 레시피가 없습니다")
                                     .encode_wide()
                                     .collect::<Vec<_>>();
@@ -226,6 +230,7 @@ fn main() -> Result<()> {
                                     );
                                 }
                             } else {
+                                toggle_window_transparent(main_hwnd, false);
                                 unsafe {
                                     let brush = wingdi::CreateSolidBrush(RGB(0, 255, 0));
 
@@ -270,7 +275,19 @@ fn main() -> Result<()> {
     }
 }
 
-fn set_window_transparent(hwnd: *mut HWND__) {
+fn toggle_window_transparent(hwnd: *mut HWND__, apply: bool) {
+    unsafe {
+        let style = winuser::GetWindowLongA(hwnd, winuser::GWL_EXSTYLE);
+        let style = if apply {
+            style | winuser::WS_EX_TRANSPARENT as i32
+        } else {
+            style & !winuser::WS_EX_TRANSPARENT as i32
+        };
+        winuser::SetWindowLongA(hwnd, winuser::GWL_EXSTYLE, style);
+    }
+}
+
+fn set_main_window_style(hwnd: *mut HWND__) {
     unsafe {
         let style = winuser::GetWindowLongA(hwnd, winuser::GWL_EXSTYLE);
         winuser::SetWindowLongA(
