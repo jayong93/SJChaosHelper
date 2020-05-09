@@ -117,13 +117,29 @@ fn main() -> Result<()> {
                                 }
                             }
 
+                            let types = [
+                                helper::ItemType::Weapon1HOrShield,
+                                helper::ItemType::Weapon2H,
+                                helper::ItemType::Body,
+                                helper::ItemType::Helmet,
+                                helper::ItemType::Gloves,
+                                helper::ItemType::Body,
+                                helper::ItemType::Boots,
+                                helper::ItemType::Ring,
+                                helper::ItemType::Amulet,
+                            ];
+
                             let mut info = OsString::from("Type: <75, >=75\n");
-                            for (item_type, (chaos, regal)) in recipe_map {
+                            for item_type in types.iter() {
+                                let (chaos, regal) = recipe_map
+                                    .get(item_type)
+                                    .map(|(c, r)| (c.len(), r.len()))
+                                    .unwrap_or((0, 0));
                                 info.push(format!(
                                     "{}: ({}, {})\n",
                                     item_type.as_ref(),
-                                    chaos.len(),
-                                    regal.len()
+                                    chaos,
+                                    regal
                                 ));
                             }
                             info.push(format!("Total Chaos: {}", chaos_num));
@@ -147,6 +163,14 @@ fn main() -> Result<()> {
                             }
                         }
                         helper::ResponseFromNetwork::ChaosRecipe((chaos_recipe, is_quad_stash)) => {
+                            unsafe {
+                                let main_dc = winuser::GetDC(main_hwnd);
+                                let white_brush =
+                                    wingdi::GetStockObject(wingdi::WHITE_BRUSH as i32);
+                                winuser::FillRect(main_dc, &main_rect, white_brush as _);
+                                winuser::ReleaseDC(main_hwnd, main_dc);
+                            }
+
                             if chaos_recipe.is_empty() {
                                 for child in child_map.values() {
                                     let child_hwnd = child.hwnd() as _;
