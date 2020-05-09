@@ -281,7 +281,12 @@ fn set_window_transparent(hwnd: *mut HWND__) {
                 | winuser::WS_EX_TRANSPARENT as i32
                 | winuser::WS_EX_TOOLWINDOW as i32,
         );
-        winuser::SetLayeredWindowAttributes(hwnd, 0, 175, winuser::LWA_ALPHA);
+        winuser::SetLayeredWindowAttributes(
+            hwnd,
+            RGB(0, 255, 0),
+            175,
+            winuser::LWA_ALPHA | winuser::LWA_COLORKEY,
+        );
         let style = winuser::GetWindowLongA(hwnd, winuser::GWL_STYLE);
         let main_style = style
             & !(winuser::WS_OVERLAPPED as i32
