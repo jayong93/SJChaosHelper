@@ -40,7 +40,7 @@ pub fn save_account_data(path: &std::path::Path, account: &AccountData) -> Resul
 
     let out_file = OpenOptions::new().create(true).write(true).open(path)?;
     to_writer(out_file, account)?;
-    
+
     Ok(())
 }
 
@@ -287,78 +287,52 @@ fn network_thread_func(recv: mpsc::Receiver<InternalMessage>) -> impl FnOnce() -
         let mut total_count = chaos_queue.len();
 
         for msg in recv.iter() {
-            in_send.try_send(()).ok();
-            let recv_result = data_recv.try_iter().last();
             let is_quad_stash = IS_QUAD_STASH.load(Ordering::Relaxed);
             match msg {
-                InternalMessage::RequestChaosRecipe(sender) => match recv_result {
-                    Some(Ok(new_map)) => {
-                        let mut next_item = chaos_queue.pop_front();
-                        if new_map != map || next_item.is_none() {
-                            map = new_map;
-                            chaos_queue = ChaosListGenerator::new(&map).collect();
-                            total_count = chaos_queue.len();
-                            next_item = chaos_queue.pop_front();
-                        }
-                        match next_item {
-                            Some(chaos_list) => sender
-                                .send(Ok(ResponseFromNetwork::ChaosRecipe((
-                                    chaos_list,
-                                    is_quad_stash,
-                                ))))
-                                .unwrap(),
-                            None => sender
-                                .send(Ok(ResponseFromNetwork::ChaosRecipe((
-                                    Vec::new(),
-                                    is_quad_stash,
-                                ))))
-                                .unwrap(),
-                        }
-                    }
-                    Some(Err(e)) => {
-                        sender.send(Err(e)).unwrap();
-                    }
-                    None => match chaos_queue.pop_front() {
-                        Some(chaos_list) => sender
-                            .send(Ok(ResponseFromNetwork::ChaosRecipe((
-                                chaos_list,
-                                is_quad_stash,
-                            ))))
-                            .unwrap(),
-                        None => sender
-                            .send(Ok(ResponseFromNetwork::ChaosRecipe((
-                                Vec::new(),
-                                is_quad_stash,
-                            ))))
-                            .unwrap(),
-                    },
+                InternalMessage::RequestChaosRecipe(sender) => match chaos_queue.pop_front() {
+                    Some(chaos_list) => sender
+                        .send(Ok(ResponseFromNetwork::ChaosRecipe((
+                            chaos_list,
+                            is_quad_stash,
+                        ))))
+                        .unwrap(),
+                    None => sender
+                        .send(Ok(ResponseFromNetwork::ChaosRecipe((
+                            Vec::new(),
+                            is_quad_stash,
+                        ))))
+                        .unwrap(),
                 },
-                InternalMessage::RequestStashStatus(sender) => match recv_result {
-                    Some(Ok(new_map)) => {
-                        if new_map != map {
-                            map = new_map;
-                            chaos_queue = ChaosListGenerator::new(&map).collect();
-                            total_count = chaos_queue.len();
+                InternalMessage::RequestStashStatus(sender) => {
+                    in_send.try_send(()).ok();
+                    let recv_result = data_recv.try_iter().last();
+                    match recv_result {
+                        Some(Ok(new_map)) => {
+                            if new_map != map {
+                                map = new_map;
+                                chaos_queue = ChaosListGenerator::new(&map).collect();
+                                total_count = chaos_queue.len();
+                            }
+                            sender
+                                .send(Ok(ResponseFromNetwork::StashStatus((
+                                    map.clone(),
+                                    total_count,
+                                ))))
+                                .unwrap();
                         }
-                        sender
-                            .send(Ok(ResponseFromNetwork::StashStatus((
-                                map.clone(),
-                                total_count,
-                            ))))
-                            .unwrap();
+                        Some(Err(e)) => {
+                            sender.send(Err(e)).unwrap();
+                        }
+                        None => {
+                            sender
+                                .send(Ok(ResponseFromNetwork::StashStatus((
+                                    map.clone(),
+                                    total_count,
+                                ))))
+                                .unwrap();
+                        }
                     }
-                    Some(Err(e)) => {
-                        sender.send(Err(e)).unwrap();
-                    }
-                    None => {
-                        sender
-                            .send(Ok(ResponseFromNetwork::StashStatus((
-                                map.clone(),
-                                total_count,
-                            ))))
-                            .unwrap();
-                    }
-                },
+                }
             }
         }
     }
