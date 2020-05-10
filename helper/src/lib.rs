@@ -274,6 +274,10 @@ fn network_thread_func(recv: mpsc::Receiver<InternalMessage>) -> impl FnOnce() -
                                     regal_list.push(item);
                                 }
                             }
+                            for (chaos_list, regal_list) in map.values_mut() {
+                                chaos_list.sort_unstable_by(|a, b| (a.w * a.h).cmp(&(b.w * b.h)).reverse());
+                                regal_list.sort_unstable_by(|a, b| (a.w * a.h).cmp(&(b.w * b.h)).reverse());
+                            }
                             data_send.send(Ok(map)).unwrap();
                         }
                         Err(e) => data_send.send(Err(e)).unwrap(),
