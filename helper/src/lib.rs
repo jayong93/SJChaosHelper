@@ -153,44 +153,44 @@ impl<'a> ChaosListGenerator<'a> {
 
     fn get_weapon_items(&mut self, can_make_chaos: bool) -> Option<Either<Vec<Item>, &'a Item>> {
         self.stash_items
-            .get_mut(&ItemType::Weapon1HOrShield)
-            .and_then(|list_tuple| match can_make_chaos {
-                true => Self::get_item(list_tuple, can_make_chaos).and_then(|e| {
-                    let mut vec = vec![e.into_inner().clone()];
-                    Self::get_item(list_tuple, can_make_chaos).map(|e| {
-                        vec.push(e.into_inner().clone());
-                        vec
-                    })
-                }),
-                false => Self::get_item(list_tuple, can_make_chaos).and_then(|e| {
-                    e.either_with(
-                        list_tuple,
-                        |list_tuple, item| {
-                            Self::get_item(list_tuple, true)
-                                .map(|e| vec![e.into_inner().clone(), item.clone()])
-                        },
-                        |list_tuple, item| {
-                            Self::get_item(list_tuple, false).and_then(|e| {
-                                e.left().map(|item2| vec![item.clone(), item2.clone()])
-                            })
-                        },
-                    )
-                }),
+            .get_mut(&ItemType::Weapon2H)
+            .and_then(|list_tuple| {
+                Self::get_item(list_tuple, can_make_chaos).and_then(|e| {
+                    if can_make_chaos {
+                        Some(e.into_inner())
+                    } else {
+                        e.left()
+                    }
+                })
             })
-            .map(|items| Either::Left(items))
+            .map(|item| Either::Right(item))
             .or_else(|| {
                 self.stash_items
-                    .get_mut(&ItemType::Weapon2H)
-                    .and_then(|list_tuple| {
-                        Self::get_item(list_tuple, can_make_chaos).and_then(|e| {
-                            if can_make_chaos {
-                                Some(e.into_inner())
-                            } else {
-                                e.left()
-                            }
-                        })
+                    .get_mut(&ItemType::Weapon1HOrShield)
+                    .and_then(|list_tuple| match can_make_chaos {
+                        true => Self::get_item(list_tuple, can_make_chaos).and_then(|e| {
+                            let mut vec = vec![e.into_inner().clone()];
+                            Self::get_item(list_tuple, can_make_chaos).map(|e| {
+                                vec.push(e.into_inner().clone());
+                                vec
+                            })
+                        }),
+                        false => Self::get_item(list_tuple, can_make_chaos).and_then(|e| {
+                            e.either_with(
+                                list_tuple,
+                                |list_tuple, item| {
+                                    Self::get_item(list_tuple, true)
+                                        .map(|e| vec![e.into_inner().clone(), item.clone()])
+                                },
+                                |list_tuple, item| {
+                                    Self::get_item(list_tuple, false).and_then(|e| {
+                                        e.left().map(|item2| vec![item.clone(), item2.clone()])
+                                    })
+                                },
+                            )
+                        }),
                     })
-                    .map(|item| Either::Right(item))
+                    .map(|items| Either::Left(items))
             })
     }
 }
