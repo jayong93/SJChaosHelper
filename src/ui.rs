@@ -156,6 +156,7 @@ pub fn ui_loop<T: backend::Backend>(
                     }
                     State::Show if key == 'r' => {
                         helper::set_account(account_data.clone());
+                        crate::IS_INITIALIZED.store(true, std::sync::atomic::Ordering::Release);
                         match helper::acquire_chaos_list(true) {
                             Ok(result) => {
                                 loop_proxy.send_event(result)?;

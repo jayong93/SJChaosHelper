@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::sync::atomic::{AtomicBool, Ordering};
 use winapi::shared::minwindef::FALSE;
 use winapi::shared::ntdef::NULL;
 use winapi::shared::windef::{HWND__, RECT};
@@ -16,6 +17,7 @@ mod ui;
 
 const STASH_SIZE: (u32, u32) = (632, 632);
 const STASH_POS: (u32, u32) = (17, 162);
+static IS_INITIALIZED: AtomicBool = AtomicBool::new(false);
 
 struct StashCell {
     x: u32,
@@ -137,7 +139,9 @@ fn main() -> Result<()> {
                     }
 
                     match key_event.virtual_keycode {
-                        _ if !key_event.modifiers.ctrl() || !key_event.modifiers.shift() => {}
+                        _ if !key_event.modifiers.ctrl()
+                            || !key_event.modifiers.shift()
+                            || !IS_INITIALIZED.load(Ordering::Acquire) => {}
                         Some(VirtualKeyCode::F9) => {
                             if let Ok(result) = helper::acquire_chaos_list(false) {
                                 loop_proxy.send_event(result).ok();
