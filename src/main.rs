@@ -147,15 +147,12 @@ fn main() -> Result<()> {
                                 loop_proxy.send_event(result).ok();
                             }
                         }
-                        Some(VirtualKeyCode::F10) => unsafe {
-                            winuser::ShowWindow(main_hwnd, winuser::SW_HIDE);
-                        },
-                        Some(VirtualKeyCode::F11) => {
+                        Some(VirtualKeyCode::F10) => {
                             if let Ok(result) = helper::acquire_chaos_list(true) {
                                 loop_proxy.send_event(result).ok();
                             }
                         }
-                        Some(VirtualKeyCode::F12) => unsafe {
+                        Some(VirtualKeyCode::F11) => unsafe {
                             winuser::ShowWindow(main_hwnd, winuser::SW_HIDE);
                         },
                         _ => {}
