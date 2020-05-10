@@ -275,8 +275,12 @@ fn network_thread_func(recv: mpsc::Receiver<InternalMessage>) -> impl FnOnce() -
                                 }
                             }
                             for (chaos_list, regal_list) in map.values_mut() {
-                                chaos_list.sort_unstable_by(|a, b| (a.w * a.h).cmp(&(b.w * b.h)).reverse());
-                                regal_list.sort_unstable_by(|a, b| (a.w * a.h).cmp(&(b.w * b.h)).reverse());
+                                chaos_list.sort_unstable_by(|a, b| {
+                                    (a.w * a.h).cmp(&(b.w * b.h)).reverse()
+                                });
+                                regal_list.sort_unstable_by(|a, b| {
+                                    (a.w * a.h).cmp(&(b.w * b.h)).reverse()
+                                });
                             }
                             data_send.send(Ok(map)).unwrap();
                         }
@@ -312,11 +316,9 @@ fn network_thread_func(recv: mpsc::Receiver<InternalMessage>) -> impl FnOnce() -
                     let recv_result = data_recv.try_iter().last();
                     match recv_result {
                         Some(Ok(new_map)) => {
-                            if new_map != map {
-                                map = new_map;
-                                chaos_queue = ChaosListGenerator::new(&map).collect();
-                                total_count = chaos_queue.len();
-                            }
+                            map = new_map;
+                            chaos_queue = ChaosListGenerator::new(&map).collect();
+                            total_count = chaos_queue.len();
                             sender
                                 .send(Ok(ResponseFromNetwork::StashStatus((
                                     map.clone(),
@@ -328,6 +330,7 @@ fn network_thread_func(recv: mpsc::Receiver<InternalMessage>) -> impl FnOnce() -
                             sender.send(Err(e)).unwrap();
                         }
                         None => {
+                            chaos_queue = ChaosListGenerator::new(&map).collect();
                             sender
                                 .send(Ok(ResponseFromNetwork::StashStatus((
                                     map.clone(),
