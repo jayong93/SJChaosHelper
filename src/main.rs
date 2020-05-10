@@ -174,7 +174,7 @@ fn main() -> Result<()> {
                                 helper::ItemType::Amulet,
                             ];
 
-                            let mut info = OsString::from("Type: <75, >=75\n");
+                            let mut info = OsString::from("--- Type: (ilvl<75, ilvl>=75) ---\n");
                             for item_type in types.iter() {
                                 let (chaos, regal) = recipe_map
                                     .get(item_type)
@@ -190,20 +190,36 @@ fn main() -> Result<()> {
                             info.push(format!("Total Chaos: {}", chaos_num));
 
                             let text: Vec<_> = info.encode_wide().collect();
+                            let mut text_rect = main_rect.clone();
                             unsafe {
                                 let main_dc = winuser::GetDC(main_hwnd);
-                                let white_brush =
-                                    wingdi::GetStockObject(wingdi::WHITE_BRUSH as i32);
-                                winuser::FillRect(main_dc, &main_rect, white_brush as _);
                                 winuser::DrawTextW(
                                     main_dc,
                                     text.as_ptr(),
                                     text.len() as i32,
-                                    &mut main_rect,
+                                    &mut text_rect,
+                                    winuser::DT_CALCRECT
+                                        | winuser::DT_WORDBREAK
+                                        | winuser::DT_CENTER
+                                        | winuser::DT_VCENTER,
+                                );
+
+                                let green_brush = wingdi::CreateSolidBrush(RGB(0, 255, 0));
+                                let white_brush =
+                                    wingdi::GetStockObject(wingdi::WHITE_BRUSH as i32);
+                                winuser::FillRect(main_dc, &main_rect, green_brush as _);
+                                winuser::FillRect(main_dc, &text_rect, white_brush as _);
+                                winuser::DrawTextW(
+                                    main_dc,
+                                    text.as_ptr(),
+                                    text.len() as i32,
+                                    &mut text_rect,
                                     winuser::DT_CENTER
                                         | winuser::DT_VCENTER
                                         | winuser::DT_WORDBREAK,
                                 );
+
+                                wingdi::DeleteObject(green_brush as _);
                                 winuser::ReleaseDC(main_hwnd, main_dc);
                             }
                         }
