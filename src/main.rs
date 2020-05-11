@@ -275,9 +275,9 @@ fn toggle_window_transparent(hwnd: *mut HWND__, apply: bool) {
     unsafe {
         let style = winuser::GetWindowLongA(hwnd, winuser::GWL_EXSTYLE);
         let style = if apply {
-            style | winuser::WS_EX_TRANSPARENT as i32
+            style | winuser::WS_EX_TRANSPARENT as i32 | winuser::WS_EX_TOOLWINDOW as i32
         } else {
-            style & !winuser::WS_EX_TRANSPARENT as i32
+            style & !winuser::WS_EX_TRANSPARENT as i32 | winuser::WS_EX_TOOLWINDOW as i32
         };
         winuser::SetWindowLongA(hwnd, winuser::GWL_EXSTYLE, style);
     }
@@ -285,12 +285,10 @@ fn toggle_window_transparent(hwnd: *mut HWND__, apply: bool) {
 
 fn set_main_window_style(hwnd: *mut HWND__) {
     unsafe {
-        let style = winuser::GetWindowLongA(hwnd, winuser::GWL_EXSTYLE);
         winuser::SetWindowLongA(
             hwnd,
             winuser::GWL_EXSTYLE,
-            style
-                | winuser::WS_EX_LAYERED as i32
+            winuser::WS_EX_LAYERED as i32
                 | winuser::WS_EX_TRANSPARENT as i32
                 | winuser::WS_EX_TOOLWINDOW as i32,
         );
