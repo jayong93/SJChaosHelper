@@ -20,6 +20,9 @@ use tui::{
 };
 
 const SAVE_FILE_NAME: &'static str = "chaos_helper.info";
+lazy_static! {
+    static ref LEAGUE_DATA: Result<Vec<String>> = helper::get_league_list();
+}
 
 pub fn init_ui() -> Result<(Terminal<CrosstermBackend<Stdout>>, AccountData)> {
     enable_raw_mode().expect("Can't use raw mode");
@@ -45,9 +48,11 @@ pub fn init_ui() -> Result<(Terminal<CrosstermBackend<Stdout>>, AccountData)> {
         }
     }
 
+    let league_data = LEAGUE_DATA.as_ref().map_err(|e| anyhow!(e))?;
+
     terminal
         .draw(|mut f| {
-            draw_ui(&mut f, &State::Show, &data, &error);
+            draw_ui(&mut f, &State::Show, &data, league_data, &error);
         })
         .map_err(|e| {
             close_ui(&mut terminal);
@@ -101,6 +106,19 @@ impl Field {
             }
         }
     }
+    fn erase_word(&mut self) {
+        use regex::Regex;
+        lazy_static! {
+            static ref LAST_WORD_PTN: Regex = Regex::new(r"(^|\s)\S+\s*$").unwrap();
+        }
+
+        match self {
+            Self::Account(s) | Self::Cookie(s) | Self::League(s) => {
+                *s = LAST_WORD_PTN.replace(s, "$1").into_owned();
+            }
+            Self::TabIdx(i) => *i = None,
+        }
+    }
 }
 #[derive(Debug)]
 enum State {
@@ -138,6 +156,8 @@ pub fn ui_loop<T: backend::Backend>(
             }
         }
     });
+
+    let league_data = LEAGUE_DATA.as_ref().map_err(|e| anyhow!(e))?;
 
     let save_name = dirs::home_dir()
         .ok_or(anyhow!("Can't get home directory path"))?
@@ -202,10 +222,14 @@ pub fn ui_loop<T: backend::Backend>(
                 },
                 CEvent::Key(KeyEvent {
                     code: KeyCode::Backspace,
-                    ..
+                    modifiers,
                 }) => {
                     if let State::Edit(f) = &mut state {
-                        f.erase();
+                        if modifiers == KeyModifiers::CONTROL {
+                            f.erase_word();
+                        } else {
+                            f.erase();
+                        }
                     }
                 }
                 CEvent::Key(KeyEvent { code, .. }) => match state {
@@ -241,7 +265,7 @@ pub fn ui_loop<T: backend::Backend>(
             _ => {}
         }
         terminal.draw(|mut f| {
-            draw_ui(&mut f, &state, &account_data, &error);
+            draw_ui(&mut f, &state, &account_data, league_data, &error);
         })?;
     }
     Ok(())
@@ -251,6 +275,7 @@ fn draw_ui<T: backend::Backend>(
     f: &mut Frame<T>,
     state: &State,
     account_data: &AccountData,
+    league_data: &Vec<String>,
     error: &str,
 ) {
     let layout = Layout::default()
@@ -338,13 +363,10 @@ fn draw_ui<T: backend::Backend>(
         .block(Block::default().borders(Borders::ALL).title("Account"))
         .wrap(true);
     f.render_widget(para, middle_layout[0]);
-    let leagues = helper::get_league_list()
-        .map(|v| {
-            v.into_iter()
-                .map(|league| Text::Raw((league + "\n").into()))
-                .collect()
-        })
-        .unwrap_or(vec![Text::Raw("Can't get a league data".into())]);
+    let leagues = league_data
+        .iter()
+        .map(|v| Text::Raw((v.clone() + "\n").into()))
+        .collect::<Vec<_>>();
     let para = Paragraph::new(leagues.iter())
         .block(Block::default().borders(Borders::ALL).title("Leagues"))
         .wrap(true);

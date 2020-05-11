@@ -246,6 +246,7 @@ dependencies = [
  "dirs",
  "helper",
  "lazy_static",
+ "regex",
  "tui",
  "winapi 0.3.8",
  "winit",
