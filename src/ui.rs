@@ -310,7 +310,7 @@ fn draw_ui<T: backend::Backend>(
         account_data.league.as_str(),
         tab_idx_string.as_str(),
     ];
-    let data_labels = ["Account", "POESSID", "League", "Tab index"];
+    let data_labels = ["Account", "Web Cookie", "League", "Tab index"];
     let para_text: Vec<_> = match state {
         State::Show => data_texts
             .iter()
@@ -352,7 +352,7 @@ fn draw_ui<T: backend::Backend>(
                     } else {
                         Text::Styled(
                             Cow::Owned(format!("{}: {}\n", data_labels[i], text)),
-                            Style::new().fg(Color::Red),
+                            Style::new().fg(Color::Black),
                         )
                     }
                 })
