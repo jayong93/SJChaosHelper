@@ -19,47 +19,22 @@ const STASH_SIZE: (u32, u32) = (632, 632);
 const STASH_POS: (u32, u32) = (17, 162);
 static IS_INITIALIZED: AtomicBool = AtomicBool::new(false);
 
-struct StashCell {
-    x: u32,
-    y: u32,
-    w: u32,
-    h: u32,
-}
-
-fn get_cell_size(i: u32) -> u32 {
-    if i % 3 == 2 {
-        27
-    } else {
-        26
-    }
-}
-
-fn get_cell_pos_width(
-    mut x: u32,
-    mut y: u32,
-    mut w: u32,
-    mut h: u32,
-    is_quad_stash: bool,
-) -> StashCell {
+fn get_item_rect(mut x: u32, mut y: u32, mut w: u32, mut h: u32, is_quad_stash: bool) -> RECT {
     if !is_quad_stash {
         x *= 2;
         y *= 2;
         w *= 2;
         h *= 2;
     }
-    let out_x = (0..x).map(|i| get_cell_size(i)).fold(0, |sum, w| sum + w);
-    let out_y = (0..y).map(|i| get_cell_size(i)).fold(0, |sum, h| sum + h);
-    let out_w = (x..(x + w))
-        .map(|i| get_cell_size(i))
-        .fold(0, |sum, w| sum + w);
-    let out_h = (y..(y + h))
-        .map(|i| get_cell_size(i))
-        .fold(0, |sum, h| sum + h);
-    StashCell {
-        x: out_x,
-        y: out_y,
-        w: out_w,
-        h: out_h,
+    let left = ((x * 26) + (x / 3)) as _;
+    let top = ((y * 26) + (y / 3)) as _;
+    let right = ((x + w) * 26 + ((x + w) / 3)) as _;
+    let bottom = ((y + h) * 26 + ((y + h) / 3)) as _;
+    RECT {
+        left,
+        top,
+        right,
+        bottom,
     }
 }
 
@@ -257,14 +232,8 @@ fn main() -> Result<()> {
                                         let (x, y) = (recipe.x as u32, recipe.y as u32);
                                         let (w, h) = (recipe.w as u32, recipe.h as u32);
 
-                                        let cell = get_cell_pos_width(x, y, w, h, is_quad_stash);
+                                        let rect = get_item_rect(x, y, w, h, is_quad_stash);
 
-                                        let rect = RECT {
-                                            left: cell.x as _,
-                                            top: cell.y as _,
-                                            right: (cell.x + cell.w) as _,
-                                            bottom: (cell.y + cell.h) as _,
-                                        };
                                         winuser::FillRect(main_dc, &rect, brush);
                                     }
                                     wingdi::DeleteObject(brush as _);
