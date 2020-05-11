@@ -266,7 +266,7 @@ fn draw_ui<T: backend::Backend>(
         .split(f.size());
     let key_help = Paragraph::new(
         [Text::Raw(Cow::Borrowed(
-            "E/e : edit info, Enter: finish editing, R/r: run helper, S/s: save data",
+            "E/e : edit info, R/r: run helper, S/s: save data, Enter: finish editing, ESC: cancel editing",
         ))]
         .iter(),
     )
@@ -274,6 +274,10 @@ fn draw_ui<T: backend::Backend>(
     .wrap(true);
     f.render_widget(key_help, layout[0]);
 
+    let middle_layout = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(80), Constraint::Percentage(20)].as_ref())
+        .split(layout[1]);
     let tab_idx_string = account_data.tab_idx.to_string();
     let data_texts: Vec<&str> = vec![
         account_data.account.as_str(),
@@ -333,7 +337,18 @@ fn draw_ui<T: backend::Backend>(
     let para = Paragraph::new(para_text.iter())
         .block(Block::default().borders(Borders::ALL).title("Account"))
         .wrap(true);
-    f.render_widget(para, layout[1]);
+    f.render_widget(para, middle_layout[0]);
+    let leagues = helper::get_league_list()
+        .map(|v| {
+            v.into_iter()
+                .map(|league| Text::Raw((league + "\n").into()))
+                .collect()
+        })
+        .unwrap_or(vec![Text::Raw("Can't get a league data".into())]);
+    let para = Paragraph::new(leagues.iter())
+        .block(Block::default().borders(Borders::ALL).title("Leagues"))
+        .wrap(true);
+    f.render_widget(para, middle_layout[1]);
     let error_text = [Text::Raw(Cow::Borrowed(error))];
     let error_para = Paragraph::new(error_text.iter())
         .block(Block::default().borders(Borders::ALL).title("Info"))
