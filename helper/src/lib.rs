@@ -400,7 +400,7 @@ fn get_stash_data_in() -> Result<StashData> {
         account = g_account.clone();
     }
     res = CLIENT
-        .get("https://poe.game.daum.net/character-window/get-stash-items")
+        .get("https://www.pathofexile.com/character-window/get-stash-items")
         .query(&[
             ("accountName", account.account.as_str()),
             ("realm", "pc"),
