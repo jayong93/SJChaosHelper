@@ -42,8 +42,8 @@ pub fn init_ui() -> Result<(Terminal<CrosstermBackend<Stdout>>, AccountData)> {
             data = account;
             error = "An saved file has been loaded successfully".to_string();
         }
-        Err(e) => {
-            error = e.to_string();
+        Err(_) => {
+            error = "Can't load from a save file, use a default setting".to_owned();
             data = Default::default();
         }
     }
