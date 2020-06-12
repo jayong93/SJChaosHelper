@@ -266,6 +266,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "dirs 2.0.2",
+ "font-loader",
  "helper",
  "iced",
  "iced_native",
@@ -497,6 +498,18 @@ checksum = "db84654ad95211c082cf9795f6f83dc17d0ae6c985ac1b906369dc7384ed346d"
 dependencies = [
  "core-foundation 0.6.4",
  "core-graphics 0.17.3",
+ "foreign-types",
+ "libc",
+]
+
+[[package]]
+name = "core-text"
+version = "15.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "131b3fd1f8bd5db9f2b398fa4fdb6008c64afc04d447c306ac2c7e98fba2a61d"
+dependencies = [
+ "core-foundation 0.7.0",
+ "core-graphics 0.19.0",
  "foreign-types",
  "libc",
 ]
@@ -821,7 +834,7 @@ dependencies = [
  "byteorder",
  "core-foundation 0.6.4",
  "core-graphics 0.17.3",
- "core-text",
+ "core-text 13.3.2",
  "dirs 1.0.5",
  "dwrote",
  "euclid 0.20.13",
@@ -834,6 +847,19 @@ dependencies = [
  "memmap",
  "servo-fontconfig",
  "walkdir",
+ "winapi 0.3.8",
+]
+
+[[package]]
+name = "font-loader"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "933a61458662fbc8e3cd22cdb8331edbd78545fc044e1e2cd3d742f6ce06aa41"
+dependencies = [
+ "core-foundation 0.7.0",
+ "core-text 15.0.0",
+ "libc",
+ "servo-fontconfig",
  "winapi 0.3.8",
 ]
 

@@ -1,6 +1,6 @@
-// #![windows_subsystem = "windows"]
+#![windows_subsystem = "windows"]
 use anyhow::Result;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use winapi::shared::minwindef::FALSE;
 use winapi::shared::ntdef::NULL;
 use winapi::shared::windef::{HWND__, RECT};
@@ -8,7 +8,7 @@ use winapi::um::wingdi::{self, RGB};
 use winapi::um::winuser;
 use winit::{
     dpi::LogicalPosition,
-    event::{DeviceEvent, Event, VirtualKeyCode, WindowEvent},
+    event::{Event, WindowEvent},
     event_loop::EventLoopProxy,
     platform::windows::{EventLoopExtWindows, WindowExtWindows},
     *,
@@ -53,7 +53,7 @@ fn main() -> Result<()> {
     helper::init_module();
 
     let (tx, rx) = std::sync::mpsc::channel::<EventLoopProxy<UIMessage>>();
-    let handle = std::thread::spawn(move || -> Result<()> {
+    std::thread::spawn(move || -> Result<()> {
         let event_loop = event_loop::EventLoop::new_any_thread();
         let loop_proxy = event_loop.create_proxy();
         tx.send(loop_proxy.clone()).unwrap();

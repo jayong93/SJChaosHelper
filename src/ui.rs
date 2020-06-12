@@ -1,4 +1,5 @@
 use anyhow::Result;
+use font_loader::system_fonts;
 use helper::AccountData;
 use iced::{self, widget, Color, Element};
 use iced_native::Event;
@@ -61,7 +62,7 @@ impl widget::container::StyleSheet for Bordered {
 }
 
 impl EditableLabel {
-    fn view(&mut self, name: &str, idx: usize) -> Element<'_, AppMessage> {
+    fn view(&mut self, name: &str, idx: usize, font: iced::Font) -> Element<'_, AppMessage> {
         use iced::*;
 
         match self {
@@ -70,15 +71,15 @@ impl EditableLabel {
                     .spacing(20)
                     .align_items(Align::Center)
                     .width(Length::Fill);
-                let row = row.push(Text::new(name));
+                let row = row.push(Text::new(name).font(font));
                 row.push(
-                    Container::new(Text::new(&*text))
+                    Container::new(Text::new(&*text).font(font))
                         .padding(4)
                         .width(Length::Fill)
                         .style(Bordered),
                 )
                 .push(
-                    Button::new(state, Text::new("Edit"))
+                    Button::new(state, Text::new("Edit").font(font))
                         .on_press(AppMessage::LabelUpdateStarted(idx)),
                 )
                 .into()
@@ -88,12 +89,13 @@ impl EditableLabel {
                     .spacing(20)
                     .align_items(Align::Center)
                     .width(Length::Fill);
-                let row = row.push(Text::new(name));
+                let row = row.push(Text::new(name).font(font));
                 row.push(
                     Container::new(
                         TextInput::new(state, "Input data", input, move |text| {
                             AppMessage::LabelUpdated { idx, text }
                         })
+                        .font(font)
                         .width(Length::Fill)
                         .on_submit(AppMessage::LabelUpdateCompleted(idx)),
                     )
@@ -121,6 +123,7 @@ struct App {
     labels: [EditableLabel; 3],
     start_button_state: widget::button::State,
     save_button_state: widget::button::State,
+    font: iced::Font,
 }
 
 impl App {
@@ -131,7 +134,11 @@ use iced::Command;
 impl iced::Application for App {
     type Message = AppMessage;
     type Executor = iced::executor::Default;
-    type Flags = (AccountData, crate::EventLoopProxy<crate::UIMessage>);
+    type Flags = (
+        AccountData,
+        crate::EventLoopProxy<crate::UIMessage>,
+        iced::Font,
+    );
 
     fn new(flag: Self::Flags) -> (Self, Command<Self::Message>) {
         let league_data = LEAGUE_DATA.as_ref().unwrap();
@@ -153,6 +160,7 @@ impl iced::Application for App {
                 labels,
                 start_button_state: Default::default(),
                 save_button_state: Default::default(),
+                font: flag.2,
             },
             Command::none(),
         )
@@ -243,7 +251,8 @@ impl iced::Application for App {
                             || !modifiers.control
                             || !modifiers.shift => {}
                         KeyCode::F9 => {
-                            if let Err(e) = self.loop_proxy.send_event(crate::UIMessage::ShowStashMask)
+                            if let Err(e) =
+                                self.loop_proxy.send_event(crate::UIMessage::ShowStashMask)
                             {
                                 error_message_box(&e.to_string());
                             }
@@ -253,10 +262,10 @@ impl iced::Application for App {
                             {
                                 error_message_box(&e.to_string());
                             }
-
                         }
                         KeyCode::F11 => {
-                            if let Err(e) = self.loop_proxy.send_event(crate::UIMessage::CloseWindow)
+                            if let Err(e) =
+                                self.loop_proxy.send_event(crate::UIMessage::CloseWindow)
                             {
                                 error_message_box(&e.to_string());
                             }
@@ -272,10 +281,13 @@ impl iced::Application for App {
 
     fn view(&mut self) -> Element<'_, Self::Message> {
         use iced::*;
+
+        let font = self.font;
+
         let radio_row = Row::new()
             .spacing(20)
             .align_items(Align::Center)
-            .push(Text::new("League"));
+            .push(Text::new("League").font(font));
 
         let league_data = LEAGUE_DATA.as_ref().unwrap();
         let selected_league = self
@@ -301,7 +313,7 @@ impl iced::Application for App {
             .enumerate()
             .fold(column, |col, (idx, label)| {
                 let row = Row::new().padding(20).align_items(Align::Center);
-                let row = row.push(label.view(Self::LABEL_NAMES[idx], idx));
+                let row = row.push(label.view(Self::LABEL_NAMES[idx], idx, font));
 
                 col.push(row)
             });
@@ -313,14 +325,14 @@ impl iced::Application for App {
                         .spacing(20)
                         .align_items(Align::Center)
                         .push(
-                            Button::new(&mut self.start_button_state, Text::new("Run Helper"))
+                            Button::new(&mut self.start_button_state, Text::new("실행").font(font))
                                 .width(Length::Shrink)
                                 .on_press(AppMessage::StartHelper),
                         )
                         .push(
                             Button::new(
                                 &mut self.save_button_state,
-                                Text::new("Save Configuration"),
+                                Text::new("설정 저장").font(font),
                             )
                             .width(Length::Shrink)
                             .on_press(AppMessage::SaveConfig),
@@ -346,6 +358,20 @@ pub fn run_ui(loop_proxy: crate::EventLoopProxy<crate::UIMessage>) -> Result<()>
         .ok()
         .unwrap_or_default();
 
-    App::run(iced::Settings::with_flags((account, loop_proxy)));
+    let mut font_property = system_fonts::FontPropertyBuilder::new()
+        .family("맑은 고딕")
+        .build();
+    let font = if let Some(font) =
+        system_fonts::get(&mut font_property).map(|(data, _idx)| Box::leak(data.into_boxed_slice()))
+    {
+        iced::Font::External {
+            name: "맑은 고딕",
+            bytes: font,
+        }
+    } else {
+        iced::Font::Default
+    };
+
+    App::run(iced::Settings::with_flags((account, loop_proxy, font)));
     Ok(())
 }
