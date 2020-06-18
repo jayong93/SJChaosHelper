@@ -15,21 +15,23 @@ lazy_static! {
     static ref LEAGUE_DATA: Result<Vec<String>> = helper::get_league_list();
 }
 
-fn error_message_box(s: &str) {
+pub fn error_message_box(s: impl ToString) {
     use std::os::windows::ffi::*;
-    let s: OsString = s.into();
-    let mut s_it = s.encode_wide().collect::<Vec<_>>();
-    s_it.push(0);
-    let mut caption = OsStr::new("Error").encode_wide().collect::<Vec<_>>();
-    caption.push(0);
-    unsafe {
-        winapi::um::winuser::MessageBoxW(
-            null_mut(),
-            s_it.as_ptr(),
-            caption.as_ptr(),
-            winapi::um::winuser::MB_OK,
-        );
-    }
+    let s: OsString = s.to_string().into();
+    std::thread::spawn(move || {
+        let mut s_it = s.encode_wide().collect::<Vec<_>>();
+        s_it.push(0);
+        let mut caption = OsStr::new("Error").encode_wide().collect::<Vec<_>>();
+        caption.push(0);
+        unsafe {
+            winapi::um::winuser::MessageBoxW(
+                null_mut(),
+                s_it.as_ptr(),
+                caption.as_ptr(),
+                winapi::um::winuser::MB_OK | winapi::um::winuser::MB_SYSTEMMODAL,
+            );
+        }
+    });
 }
 
 #[derive(Clone, Debug)]
@@ -221,7 +223,7 @@ impl iced::Application for App {
                 helper::set_account(self.account_data.clone());
                 crate::IS_INITIALIZED.store(true, std::sync::atomic::Ordering::Relaxed);
                 if let Err(e) = self.loop_proxy.send_event(crate::UIMessage::ShowStatus) {
-                    error_message_box(&e.to_string());
+                    error_message_box(e);
                 }
             }
             AppMessage::SaveConfig => {
@@ -232,7 +234,7 @@ impl iced::Application for App {
                     })
                     .join(SAVE_FILE_NAME);
                 if let Err(e) = helper::save_account_data(&save_name, &self.account_data) {
-                    error_message_box(&e.to_string());
+                    error_message_box(e);
                 }
             }
             AppMessage::EventOccurred(event) => {
@@ -254,20 +256,20 @@ impl iced::Application for App {
                             if let Err(e) =
                                 self.loop_proxy.send_event(crate::UIMessage::ShowStashMask)
                             {
-                                error_message_box(&e.to_string());
+                                error_message_box(e);
                             }
                         }
                         KeyCode::F10 => {
                             if let Err(e) = self.loop_proxy.send_event(crate::UIMessage::ShowStatus)
                             {
-                                error_message_box(&e.to_string());
+                                error_message_box(e);
                             }
                         }
                         KeyCode::F11 => {
                             if let Err(e) =
                                 self.loop_proxy.send_event(crate::UIMessage::CloseWindow)
                             {
-                                error_message_box(&e.to_string());
+                                error_message_box(e);
                             }
                         }
                         _ => {}
