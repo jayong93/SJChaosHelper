@@ -12,24 +12,28 @@ use winapi;
 
 const SAVE_FILE_NAME: &'static str = "chaos_helper.info";
 lazy_static! {
-    static ref LEAGUE_DATA: Result<Vec<String>> = helper::get_league_list();
+    static ref LEAGUE_DATA: Vec<String> = helper::get_league_list()
+        .map_err(|e| error_message_box(e))
+        .unwrap();
 }
 
-fn error_message_box(s: &str) {
+pub fn error_message_box(s: impl ToString) {
     use std::os::windows::ffi::*;
-    let s: OsString = s.into();
-    let mut s_it = s.encode_wide().collect::<Vec<_>>();
-    s_it.push(0);
-    let mut caption = OsStr::new("Error").encode_wide().collect::<Vec<_>>();
-    caption.push(0);
-    unsafe {
-        winapi::um::winuser::MessageBoxW(
-            null_mut(),
-            s_it.as_ptr(),
-            caption.as_ptr(),
-            winapi::um::winuser::MB_OK,
-        );
-    }
+    let s: OsString = s.to_string().into();
+    std::thread::spawn(move || {
+        let mut s_it = s.encode_wide().collect::<Vec<_>>();
+        s_it.push(0);
+        let mut caption = OsStr::new("Error").encode_wide().collect::<Vec<_>>();
+        caption.push(0);
+        unsafe {
+            winapi::um::winuser::MessageBoxW(
+                null_mut(),
+                s_it.as_ptr(),
+                caption.as_ptr(),
+                winapi::um::winuser::MB_OK | winapi::um::winuser::MB_SYSTEMMODAL,
+            );
+        }
+    });
 }
 
 #[derive(Clone, Debug)]
@@ -141,7 +145,7 @@ impl iced::Application for App {
     );
 
     fn new(flag: Self::Flags) -> (Self, Command<Self::Message>) {
-        let league_data = LEAGUE_DATA.as_ref().unwrap();
+        let league_data = &LEAGUE_DATA;
         let league = league_data
             .iter()
             .enumerate()
@@ -215,13 +219,13 @@ impl iced::Application for App {
             }
             AppMessage::LeagueUpdated(idx) => {
                 self.league = Some(idx);
-                self.account_data.league = LEAGUE_DATA.as_ref().unwrap()[idx].clone();
+                self.account_data.league = LEAGUE_DATA[idx].clone();
             }
             AppMessage::StartHelper => {
                 helper::set_account(self.account_data.clone());
                 crate::IS_INITIALIZED.store(true, std::sync::atomic::Ordering::Relaxed);
                 if let Err(e) = self.loop_proxy.send_event(crate::UIMessage::ShowStatus) {
-                    error_message_box(&e.to_string());
+                    error_message_box(e);
                 }
             }
             AppMessage::SaveConfig => {
@@ -232,7 +236,7 @@ impl iced::Application for App {
                     })
                     .join(SAVE_FILE_NAME);
                 if let Err(e) = helper::save_account_data(&save_name, &self.account_data) {
-                    error_message_box(&e.to_string());
+                    error_message_box(e);
                 }
             }
             AppMessage::EventOccurred(event) => {
@@ -254,20 +258,20 @@ impl iced::Application for App {
                             if let Err(e) =
                                 self.loop_proxy.send_event(crate::UIMessage::ShowStashMask)
                             {
-                                error_message_box(&e.to_string());
+                                error_message_box(e);
                             }
                         }
                         KeyCode::F10 => {
                             if let Err(e) = self.loop_proxy.send_event(crate::UIMessage::ShowStatus)
                             {
-                                error_message_box(&e.to_string());
+                                error_message_box(e);
                             }
                         }
                         KeyCode::F11 => {
                             if let Err(e) =
                                 self.loop_proxy.send_event(crate::UIMessage::CloseWindow)
                             {
-                                error_message_box(&e.to_string());
+                                error_message_box(e);
                             }
                         }
                         _ => {}
@@ -289,7 +293,7 @@ impl iced::Application for App {
             .align_items(Align::Center)
             .push(Text::new("League").font(font));
 
-        let league_data = LEAGUE_DATA.as_ref().unwrap();
+        let league_data = &LEAGUE_DATA;
         let selected_league = self
             .league
             .map(|selected_idx| league_data[selected_idx].as_str());
@@ -355,7 +359,7 @@ pub fn run_ui(loop_proxy: crate::EventLoopProxy<crate::UIMessage>) -> Result<()>
         })
         .join(SAVE_FILE_NAME);
     let account = helper::load_account_data(&save_name)
-        .ok()
+        .map_err(|e| error_message_box(e))
         .unwrap_or_default();
 
     let mut font_property = system_fonts::FontPropertyBuilder::new()

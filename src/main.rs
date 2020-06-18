@@ -1,5 +1,6 @@
 #![windows_subsystem = "windows"]
 use anyhow::Result;
+use std::ffi::OsString;
 use std::sync::atomic::AtomicBool;
 use winapi::shared::minwindef::FALSE;
 use winapi::shared::ntdef::NULL;
@@ -48,7 +49,6 @@ pub enum UIMessage {
 }
 
 fn main() -> Result<()> {
-    use std::ffi::OsString;
     use std::os::windows::ffi::OsStrExt;
     helper::init_module();
 
@@ -110,16 +110,22 @@ fn main() -> Result<()> {
                         UIMessage::CloseWindow => unsafe {
                             winuser::ShowWindow(main_hwnd, winuser::SW_HIDE);
                         },
-                        UIMessage::ShowStashMask => {
-                            if let Ok(result) = helper::acquire_chaos_list(false) {
+                        UIMessage::ShowStashMask => match helper::acquire_chaos_list(false) {
+                            Ok(result) => {
                                 loop_proxy.send_event(UIMessage::ShowResult(result)).ok();
                             }
-                        }
-                        UIMessage::ShowStatus => {
-                            if let Ok(result) = helper::acquire_chaos_list(true) {
+                            Err(err) => {
+                                ui::error_message_box(err);
+                            }
+                        },
+                        UIMessage::ShowStatus => match helper::acquire_chaos_list(true) {
+                            Ok(result) => {
                                 loop_proxy.send_event(UIMessage::ShowResult(result)).ok();
                             }
-                        }
+                            Err(err) => {
+                                ui::error_message_box(err);
+                            }
+                        },
                         UIMessage::ShowResult(result) => match result {
                             helper::ResponseFromNetwork::StashStatus((recipe_map, chaos_num)) => {
                                 toggle_window_transparent(main_hwnd, true);
