@@ -1,4 +1,4 @@
-#![windows_subsystem = "windows"]
+// #![windows_subsystem = "windows"]
 use anyhow::Result;
 use std::sync::atomic::AtomicBool;
 use winapi::shared::minwindef::FALSE;
@@ -111,13 +111,23 @@ fn main() -> Result<()> {
                             winuser::ShowWindow(main_hwnd, winuser::SW_HIDE);
                         },
                         UIMessage::ShowStashMask => {
-                            if let Ok(result) = helper::acquire_chaos_list(false) {
-                                loop_proxy.send_event(UIMessage::ShowResult(result)).ok();
+                            match helper::acquire_chaos_list(false) {
+                                Ok(result) => {
+                                    loop_proxy.send_event(UIMessage::ShowResult(result)).ok();
+                                }
+                                Err(err) => {
+                                    eprintln!("{:?}", err);
+                                }
                             }
                         }
                         UIMessage::ShowStatus => {
-                            if let Ok(result) = helper::acquire_chaos_list(true) {
-                                loop_proxy.send_event(UIMessage::ShowResult(result)).ok();
+                            match helper::acquire_chaos_list(true) {
+                                Ok(result) => {
+                                    loop_proxy.send_event(UIMessage::ShowResult(result)).ok();
+                                }
+                                Err(err) => {
+                                    eprintln!("{:?}", err);
+                                }
                             }
                         }
                         UIMessage::ShowResult(result) => match result {
