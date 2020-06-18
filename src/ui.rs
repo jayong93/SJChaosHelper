@@ -12,7 +12,9 @@ use winapi;
 
 const SAVE_FILE_NAME: &'static str = "chaos_helper.info";
 lazy_static! {
-    static ref LEAGUE_DATA: Result<Vec<String>> = helper::get_league_list();
+    static ref LEAGUE_DATA: Vec<String> = helper::get_league_list()
+        .map_err(|e| error_message_box(e))
+        .unwrap();
 }
 
 pub fn error_message_box(s: impl ToString) {
@@ -143,7 +145,7 @@ impl iced::Application for App {
     );
 
     fn new(flag: Self::Flags) -> (Self, Command<Self::Message>) {
-        let league_data = LEAGUE_DATA.as_ref().unwrap();
+        let league_data = &LEAGUE_DATA;
         let league = league_data
             .iter()
             .enumerate()
@@ -217,7 +219,7 @@ impl iced::Application for App {
             }
             AppMessage::LeagueUpdated(idx) => {
                 self.league = Some(idx);
-                self.account_data.league = LEAGUE_DATA.as_ref().unwrap()[idx].clone();
+                self.account_data.league = LEAGUE_DATA[idx].clone();
             }
             AppMessage::StartHelper => {
                 helper::set_account(self.account_data.clone());
@@ -291,7 +293,7 @@ impl iced::Application for App {
             .align_items(Align::Center)
             .push(Text::new("League").font(font));
 
-        let league_data = LEAGUE_DATA.as_ref().unwrap();
+        let league_data = &LEAGUE_DATA;
         let selected_league = self
             .league
             .map(|selected_idx| league_data[selected_idx].as_str());
@@ -357,7 +359,7 @@ pub fn run_ui(loop_proxy: crate::EventLoopProxy<crate::UIMessage>) -> Result<()>
         })
         .join(SAVE_FILE_NAME);
     let account = helper::load_account_data(&save_name)
-        .ok()
+        .map_err(|e| error_message_box(e))
         .unwrap_or_default();
 
     let mut font_property = system_fonts::FontPropertyBuilder::new()
