@@ -282,9 +282,9 @@ fn draw_ui<T: backend::Backend>(
         .direction(Direction::Vertical)
         .constraints(
             [
-                Constraint::Percentage(10),
-                Constraint::Percentage(50),
-                Constraint::Percentage(40),
+                Constraint::Min(3),
+                Constraint::Ratio(3, 4),
+                Constraint::Ratio(1, 4),
             ]
             .as_ref(),
         )
