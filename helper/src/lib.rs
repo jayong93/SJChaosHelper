@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use either::Either;
 use lazy_static::lazy_static;
 use regex;
@@ -38,7 +38,11 @@ pub fn save_account_data(path: &std::path::Path, account: &AccountData) -> Resul
     use serde_json::to_writer;
     use std::fs::OpenOptions;
 
-    let out_file = OpenOptions::new().create(true).truncate(true).write(true).open(path)?;
+    let out_file = OpenOptions::new()
+        .truncate(true)
+        .create(true)
+        .write(true)
+        .open(path)?;
     to_writer(out_file, account)?;
 
     Ok(())
@@ -413,11 +417,8 @@ fn get_stash_data_in() -> Result<StashData> {
         // .header("Host", "www.pathofexile.com")
         // .header("Connection", "Keep-Alive")
         .send()?;
-    let status = res.status().as_u16();
     match res.error_for_status() {
-        Ok(mut res) => res
-            .json()
-            .with_context(move || format!("status: {}\nheaders: {:?}", status, res.headers())),
+        Ok(mut res) => res.json().map_err(|e| anyhow!(e)),
         Err(e) => Err(anyhow!(e)),
     }
 }
@@ -451,7 +452,6 @@ impl<'de> serde::de::Visitor<'de> for ItemTypeVisitor {
         E: serde::de::Error,
     {
         use regex::Regex;
-        use serde::de;
         lazy_static! {
             static ref RE: Regex = Regex::new(r"/2DItems/(.+?)/(.+?)(\.png|/)").unwrap();
         }
@@ -472,11 +472,10 @@ impl<'de> serde::de::Visitor<'de> for ItemTypeVisitor {
                 (Some("Amulets"), _) => Ok(ItemType::Amulet),
                 (Some("Rings"), _) => Ok(ItemType::Ring),
                 (Some("Belts"), _) => Ok(ItemType::Belt),
-                (Some(_), Some(_)) => Ok(ItemType::Useless),
-                _ => Err(de::Error::invalid_value(de::Unexpected::Str(s), &self)),
+                _ => Ok(ItemType::Useless),
             }
         } else {
-            Err(de::Error::invalid_value(de::Unexpected::Str(s), &self))
+            Ok(ItemType::Useless)
         }
     }
 }
