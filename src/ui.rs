@@ -240,18 +240,14 @@ impl iced::Application for App {
                 }
             }
             AppMessage::EventOccurred(event) => {
-                use iced_native::input::keyboard;
-                use iced_native::input::ButtonState;
+                use iced_native::{device, keyboard};
                 use keyboard::KeyCode;
                 match event {
-                    Event::Keyboard(keyboard::Event::Input {
-                        state,
+                    Event::Raw(device::Event::KeyInput(keyboard::Event::KeyPressed {
                         key_code,
                         modifiers,
-                    }) => match key_code {
-                        _ if state == ButtonState::Released
-                            || !crate::IS_INITIALIZED
-                                .load(std::sync::atomic::Ordering::Acquire)
+                    })) => match key_code {
+                        _ if !crate::IS_INITIALIZED.load(std::sync::atomic::Ordering::Acquire)
                             || !modifiers.control
                             || !modifiers.shift => {}
                         KeyCode::F9 => {
