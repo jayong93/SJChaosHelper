@@ -38,7 +38,7 @@ pub fn save_account_data(path: &std::path::Path, account: &AccountData) -> Resul
     use serde_json::to_writer;
     use std::fs::OpenOptions;
 
-    let out_file = OpenOptions::new().create(true).write(true).open(path)?;
+    let out_file = OpenOptions::new().create(true).truncate(true).write(true).open(path)?;
     to_writer(out_file, account)?;
 
     Ok(())
