@@ -240,13 +240,13 @@ impl iced::Application for App {
                 }
             }
             AppMessage::EventOccurred(event) => {
-                use iced_native::keyboard;
+                use iced_native::{device, keyboard};
                 use keyboard::KeyCode;
                 match event {
-                    Event::Keyboard(keyboard::Event::KeyPressed {
+                    Event::Raw(device::Event::KeyInput(keyboard::Event::KeyPressed {
                         key_code,
                         modifiers,
-                    }) => match key_code {
+                    })) => match key_code {
                         _ if !crate::IS_INITIALIZED.load(std::sync::atomic::Ordering::Acquire)
                             || !modifiers.control
                             || !modifiers.shift => {}
@@ -272,6 +272,9 @@ impl iced::Application for App {
                         }
                         _ => {}
                     },
+                    Event::Raw(device::Event::MouseMotion(x, y)) => {
+                        // dbg!((x,y));
+                    }
                     _ => {}
                 }
             }
