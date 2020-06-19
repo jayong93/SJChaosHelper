@@ -272,9 +272,6 @@ impl iced::Application for App {
                         }
                         _ => {}
                     },
-                    Event::Raw(device::Event::MouseMotion(x, y)) => {
-                        // dbg!((x,y));
-                    }
                     _ => {}
                 }
             }

@@ -1,4 +1,4 @@
-// #![windows_subsystem = "windows"]
+#![windows_subsystem = "windows"]
 use anyhow::Result;
 use std::ffi::OsString;
 use std::sync::atomic::AtomicBool;

@@ -1343,6 +1343,7 @@ dependencies = [
 [[package]]
 name = "iced"
 version = "0.1.1"
+source = "git+https://github.com/jayong93/iced?branch=device_event#9d3d66570f162175a5e83b5f22a9994c90f53fea"
 dependencies = [
  "iced_core",
  "iced_futures",
@@ -1354,10 +1355,12 @@ dependencies = [
 [[package]]
 name = "iced_core"
 version = "0.2.1"
+source = "git+https://github.com/jayong93/iced?branch=device_event#9d3d66570f162175a5e83b5f22a9994c90f53fea"
 
 [[package]]
 name = "iced_futures"
 version = "0.1.2"
+source = "git+https://github.com/jayong93/iced?branch=device_event#9d3d66570f162175a5e83b5f22a9994c90f53fea"
 dependencies = [
  "futures 0.3.5",
  "log",
@@ -1367,6 +1370,7 @@ dependencies = [
 [[package]]
 name = "iced_graphics"
 version = "0.1.0"
+source = "git+https://github.com/jayong93/iced?branch=device_event#9d3d66570f162175a5e83b5f22a9994c90f53fea"
 dependencies = [
  "bytemuck",
  "font-kit",
@@ -1379,6 +1383,7 @@ dependencies = [
 [[package]]
 name = "iced_native"
 version = "0.2.2"
+source = "git+https://github.com/jayong93/iced?branch=device_event#9d3d66570f162175a5e83b5f22a9994c90f53fea"
 dependencies = [
  "iced_core",
  "iced_futures",
@@ -1390,6 +1395,7 @@ dependencies = [
 [[package]]
 name = "iced_style"
 version = "0.1.0"
+source = "git+https://github.com/jayong93/iced?branch=device_event#9d3d66570f162175a5e83b5f22a9994c90f53fea"
 dependencies = [
  "iced_core",
 ]
@@ -1397,6 +1403,7 @@ dependencies = [
 [[package]]
 name = "iced_web"
 version = "0.2.1"
+source = "git+https://github.com/jayong93/iced?branch=device_event#9d3d66570f162175a5e83b5f22a9994c90f53fea"
 dependencies = [
  "dodrio",
  "iced_core",
@@ -1412,6 +1419,7 @@ dependencies = [
 [[package]]
 name = "iced_wgpu"
 version = "0.2.2"
+source = "git+https://github.com/jayong93/iced?branch=device_event#9d3d66570f162175a5e83b5f22a9994c90f53fea"
 dependencies = [
  "bytemuck",
  "gfx-memory",
@@ -1430,6 +1438,7 @@ dependencies = [
 [[package]]
 name = "iced_winit"
 version = "0.1.1"
+source = "git+https://github.com/jayong93/iced?branch=device_event#9d3d66570f162175a5e83b5f22a9994c90f53fea"
 dependencies = [
  "iced_graphics",
  "iced_native",
@@ -3124,7 +3133,7 @@ version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3bfd5b7557925ce778ff9b9ef90e3ade34c524b5ff10e239c69a42d546d2af56"
 dependencies = [
- "rand 0.7.3",
+ "rand 0.6.5",
 ]
 
 [[package]]
