@@ -119,6 +119,13 @@ impl Default for EditableLabel {
     }
 }
 
+#[derive(Debug, Eq, PartialEq)]
+enum AdjustingWindowStatus {
+    None,
+    LeftTop,
+    RightBottom,
+}
+
 #[derive(Debug)]
 struct App {
     loop_proxy: crate::EventLoopProxy<crate::UIMessage>,
@@ -128,6 +135,7 @@ struct App {
     start_button_state: widget::button::State,
     save_button_state: widget::button::State,
     font: iced::Font,
+    win_status: AdjustingWindowStatus,
 }
 
 impl App {
@@ -165,6 +173,7 @@ impl iced::Application for App {
                 start_button_state: Default::default(),
                 save_button_state: Default::default(),
                 font: flag.2,
+                win_status: AdjustingWindowStatus::None,
             },
             Command::none(),
         )
@@ -250,6 +259,15 @@ impl iced::Application for App {
                         _ if !crate::IS_INITIALIZED.load(std::sync::atomic::Ordering::Acquire)
                             || !modifiers.control
                             || !modifiers.shift => {}
+                        KeyCode::F8 if self.win_status == AdjustingWindowStatus::LeftTop => {
+                            self.win_status = AdjustingWindowStatus::RightBottom;
+                        }
+                        KeyCode::F8 if self.win_status == AdjustingWindowStatus::RightBottom => {
+                            self.win_status = AdjustingWindowStatus::None;
+                        }
+                        KeyCode::F8 => {
+                            self.win_status = AdjustingWindowStatus::LeftTop;
+                        }
                         KeyCode::F9 => {
                             if let Err(e) =
                                 self.loop_proxy.send_event(crate::UIMessage::ShowStashMask)
@@ -272,6 +290,21 @@ impl iced::Application for App {
                         }
                         _ => {}
                     },
+                    Event::Raw(iced_native::device::Event::MouseMotion(_x, _y)) => {
+                        let result = match self.win_status {
+                            AdjustingWindowStatus::LeftTop => {
+                                self.loop_proxy.send_event(crate::UIMessage::ChangeLeftTop)
+                            }
+                            AdjustingWindowStatus::RightBottom => self
+                                .loop_proxy
+                                .send_event(crate::UIMessage::ChangeRightBottom),
+                            _ => Ok(()),
+                        };
+
+                        if let Err(e) = result {
+                            error_message_box(e);
+                        }
+                    }
                     _ => {}
                 }
             }
