@@ -56,6 +56,7 @@ pub enum UIMessage {
     ShowResult(helper::ResponseFromNetwork),
     ChangeLeftTop,
     ChangeRightBottom,
+    InitWindow(ui::WindowRect),
 }
 
 fn get_cursor_pos() -> Result<(i32, i32)> {
@@ -142,6 +143,23 @@ fn main() -> Result<()> {
                 Event::UserEvent(e) => {
                     show_window(main_hwnd);
                     match e {
+                        UIMessage::InitWindow(win_rect) => {
+                            win_x = win_rect.left;
+                            win_y = win_rect.top;
+                            main_rect.right = (win_x - win_rect.right).abs();
+                            main_rect.bottom = (win_y - win_rect.bottom).abs();
+                            unsafe {
+                                winuser::SetWindowPos(
+                                    main_hwnd,
+                                    NULL as _,
+                                    win_x,
+                                    win_y,
+                                    main_rect.right,
+                                    main_rect.bottom,
+                                    winuser::SWP_NOZORDER | winuser::SWP_NOOWNERZORDER,
+                                );
+                            }
+                        }
                         UIMessage::ChangeLeftTop => match get_cursor_pos() {
                             Ok((x, y)) => unsafe {
                                 win_x = x;

@@ -34,27 +34,6 @@ pub struct AccountData {
     pub tab_idx: usize,
 }
 
-pub fn save_account_data(path: &std::path::Path, account: &AccountData) -> Result<()> {
-    use serde_json::to_writer;
-    use std::fs::OpenOptions;
-
-    let out_file = OpenOptions::new()
-        .truncate(true)
-        .create(true)
-        .write(true)
-        .open(path)?;
-    to_writer(out_file, account)?;
-
-    Ok(())
-}
-
-pub fn load_account_data(path: &std::path::Path) -> Result<AccountData> {
-    use serde_json::from_reader;
-    use std::fs::OpenOptions;
-    let out_file = OpenOptions::new().read(true).open(path)?;
-    from_reader(out_file).map_err(|e| anyhow!(e))
-}
-
 #[derive(Deserialize)]
 struct League {
     id: String,
