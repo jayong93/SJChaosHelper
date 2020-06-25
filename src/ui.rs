@@ -7,6 +7,7 @@ use crossterm::{
 };
 use helper::AccountData;
 use lazy_static::lazy_static;
+use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::io::{stdout, Stdout, Write};
 use std::sync::Mutex;
@@ -18,7 +19,6 @@ use tui::{
     widgets::{Block, Borders, Paragraph, Text},
     Terminal,
 };
-use serde::{Serialize, Deserialize};
 
 const SAVE_FILE_NAME: &'static str = "chaos_helper.info";
 lazy_static! {
@@ -175,16 +175,21 @@ enum State {
     Edit(Field),
 }
 
+#[derive(Debug)]
 pub enum ChaosEvent {
     TUIEvent(CEvent),
     Error(Result<()>),
+    ChangeLeftTop(i32, i32),
+    ChangeRightBottom(i32, i32),
+    DataResponse(helper::ResponseFromNetwork),
+    ChangeWindowSize(WindowRect),
 }
 
 use helper;
 pub fn ui_loop<T: backend::Backend>(
     terminal: &mut Terminal<T>,
     mut save_data: SaveData,
-    loop_proxy: crate::EventLoopProxy<helper::ResponseFromNetwork>,
+    loop_proxy: crate::EventLoopProxy<ChaosEvent>,
     event_send: std::sync::mpsc::Sender<ChaosEvent>,
     event_recv: std::sync::mpsc::Receiver<ChaosEvent>,
 ) -> Result<()> {
@@ -192,6 +197,8 @@ pub fn ui_loop<T: backend::Backend>(
         static ref CLIPBOARD: Mutex<clipboard::ClipboardContext> =
             Mutex::new(clipboard::ClipboardProvider::new().unwrap());
     }
+
+    loop_proxy.send_event(ChaosEvent::ChangeWindowSize(save_data.window_size.unwrap_or_default())).unwrap();
 
     std::thread::spawn(move || {
         while let Ok(e) = event::read() {
@@ -223,7 +230,7 @@ pub fn ui_loop<T: backend::Backend>(
                         crate::IS_INITIALIZED.store(true, std::sync::atomic::Ordering::Release);
                         match helper::acquire_chaos_list(true) {
                             Ok(result) => {
-                                loop_proxy.send_event(result)?;
+                                loop_proxy.send_event(ChaosEvent::DataResponse(result))?;
                                 error.clear();
                             }
                             Err(e) => error = e.to_string(),
@@ -305,6 +312,18 @@ pub fn ui_loop<T: backend::Backend>(
             },
             ChaosEvent::Error(Err(err)) => {
                 error = err.to_string();
+            }
+            ChaosEvent::ChangeLeftTop(x, y) => {
+                let mut win_size = save_data.window_size.unwrap_or_default();
+                win_size.left = x;
+                win_size.top = y;
+                save_data.window_size = Some(win_size);
+            }
+            ChaosEvent::ChangeRightBottom(x, y) => {
+                let mut win_size = save_data.window_size.unwrap_or_default();
+                win_size.right = x;
+                win_size.bottom = y;
+                save_data.window_size = Some(win_size);
             }
             _ => {}
         }

@@ -46,10 +46,17 @@ fn get_item_rect(
     }
 }
 
+#[derive(Debug, Eq, PartialEq)]
+enum AdjustingWindowStatus {
+    None,
+    LeftTop,
+    RightBottom,
+}
+
 fn main() -> Result<()> {
     helper::init_module();
 
-    let (tx, rx) = std::sync::mpsc::channel::<EventLoopProxy<helper::ResponseFromNetwork>>();
+    let (tx, rx) = std::sync::mpsc::channel::<EventLoopProxy<ui::ChaosEvent>>();
     let (event_send, event_recv) = std::sync::mpsc::channel::<ui::ChaosEvent>();
     let handle;
     {
@@ -64,7 +71,8 @@ fn main() -> Result<()> {
                 .with_visible(false)
                 .build(&event_loop)?;
 
-            main_window.set_outer_position(LogicalPosition::new(STASH_POS.0, STASH_POS.1));
+            let (mut win_x, mut win_y) = STASH_POS;
+            main_window.set_outer_position(LogicalPosition::new(win_x, win_y));
             let main_hwnd = main_window.hwnd() as *mut HWND__;
             let mut main_rect = RECT {
                 top: 0,
@@ -97,6 +105,7 @@ fn main() -> Result<()> {
 
             let mut key_map = std::collections::HashMap::new();
             let mut latest_response = None;
+            let mut adjusting_window_state = AdjustingWindowStatus::None;
 
             event_loop.run(move |event, _, control_flow| {
                 *control_flow = event_loop::ControlFlow::Wait;
@@ -113,6 +122,58 @@ fn main() -> Result<()> {
                             draw_window(main_hwnd, &mut main_rect, data);
                         }
                     }
+                    Event::DeviceEvent {
+                        event: DeviceEvent::MouseMotion { delta: _ },
+                        ..
+                    } => match adjusting_window_state {
+                        AdjustingWindowStatus::LeftTop => unsafe {
+                            if let Ok((x, y)) = get_cursor_pos() {
+                                win_x = x as _;
+                                win_y = y as _;
+
+                                winuser::SetWindowPos(
+                                    main_hwnd,
+                                    NULL as _,
+                                    win_x as _,
+                                    win_y as _,
+                                    0,
+                                    0,
+                                    winuser::SWP_NOSIZE
+                                        | winuser::SWP_NOACTIVATE
+                                        | winuser::SWP_NOZORDER
+                                        | winuser::SWP_NOOWNERZORDER,
+                                );
+
+                                event_send
+                                    .send(ui::ChaosEvent::ChangeLeftTop(x, y))
+                                    .unwrap();
+                            }
+                        },
+                        AdjustingWindowStatus::RightBottom => unsafe {
+                            if let Ok((x, y)) = get_cursor_pos() {
+                                main_rect.right = (win_x as i32 - x).abs();
+                                main_rect.bottom = (win_y as i32 - y).abs();
+
+                                winuser::SetWindowPos(
+                                    main_hwnd,
+                                    NULL as _,
+                                    0,
+                                    0,
+                                    main_rect.right,
+                                    main_rect.bottom,
+                                    winuser::SWP_NOMOVE
+                                        | winuser::SWP_NOACTIVATE
+                                        | winuser::SWP_NOZORDER
+                                        | winuser::SWP_NOOWNERZORDER,
+                                );
+
+                                event_send
+                                    .send(ui::ChaosEvent::ChangeRightBottom(x, y))
+                                    .unwrap();
+                            }
+                        },
+                        _ => {}
+                    },
                     Event::DeviceEvent {
                         event: DeviceEvent::Key(key_event),
                         ..
@@ -132,9 +193,24 @@ fn main() -> Result<()> {
                             _ if !key_event.modifiers.ctrl()
                                 || !key_event.modifiers.shift()
                                 || !IS_INITIALIZED.load(Ordering::Acquire) => {}
+                            Some(VirtualKeyCode::F8)
+                                if adjusting_window_state == AdjustingWindowStatus::None =>
+                            {
+                                adjusting_window_state = AdjustingWindowStatus::LeftTop;
+                            }
+                            Some(VirtualKeyCode::F8)
+                                if adjusting_window_state == AdjustingWindowStatus::LeftTop =>
+                            {
+                                adjusting_window_state = AdjustingWindowStatus::RightBottom;
+                            }
+                            Some(VirtualKeyCode::F8) => {
+                                adjusting_window_state = AdjustingWindowStatus::None;
+                            }
                             Some(VirtualKeyCode::F9) => match helper::acquire_chaos_list(false) {
                                 Ok(result) => {
-                                    loop_proxy.send_event(result).ok();
+                                    loop_proxy
+                                        .send_event(ui::ChaosEvent::DataResponse(result))
+                                        .ok();
                                 }
                                 Err(e) => {
                                     event_send.send(ui::ChaosEvent::Error(Err(e))).unwrap();
@@ -142,7 +218,9 @@ fn main() -> Result<()> {
                             },
                             Some(VirtualKeyCode::F10) => match helper::acquire_chaos_list(true) {
                                 Ok(result) => {
-                                    loop_proxy.send_event(result).ok();
+                                    loop_proxy
+                                        .send_event(ui::ChaosEvent::DataResponse(result))
+                                        .ok();
                                 }
                                 Err(e) => {
                                     event_send.send(ui::ChaosEvent::Error(Err(e))).unwrap();
@@ -154,10 +232,27 @@ fn main() -> Result<()> {
                             _ => {}
                         }
                     }
-                    Event::UserEvent(e) => {
+                    Event::UserEvent(ui::ChaosEvent::DataResponse(e)) => {
                         show_window(main_hwnd);
                         latest_response = Some(e);
                         main_window.request_redraw();
+                    }
+                    Event::UserEvent(ui::ChaosEvent::ChangeWindowSize(win_rect)) => {
+                        win_x = win_rect.left as _;
+                        win_y = win_rect.top as _;
+                        main_rect.right = (win_rect.left - win_rect.right).abs();
+                        main_rect.bottom = (win_rect.top - win_rect.bottom).abs();
+                        unsafe {
+                            winuser::SetWindowPos(
+                                main_hwnd,
+                                NULL as _,
+                                win_x as _,
+                                win_y as _,
+                                main_rect.right,
+                                main_rect.bottom,
+                                winuser::SWP_NOZORDER | winuser::SWP_NOOWNERZORDER,
+                            );
+                        }
                     }
                     _ => {}
                 }
