@@ -18,13 +18,61 @@ use tui::{
     widgets::{Block, Borders, Paragraph, Text},
     Terminal,
 };
+use serde::{Serialize, Deserialize};
 
 const SAVE_FILE_NAME: &'static str = "chaos_helper.info";
 lazy_static! {
     static ref LEAGUE_DATA: Result<Vec<String>> = helper::get_league_list();
 }
 
-pub fn init_ui() -> Result<(Terminal<CrosstermBackend<Stdout>>, AccountData)> {
+#[derive(Debug, Serialize, Deserialize, Copy, Clone)]
+pub struct WindowRect {
+    pub left: i32,
+    pub top: i32,
+    pub right: i32,
+    pub bottom: i32,
+}
+
+impl Default for WindowRect {
+    fn default() -> Self {
+        Self {
+            left: crate::STASH_POS.0 as _,
+            top: crate::STASH_POS.1 as _,
+            right: (crate::STASH_POS.0 + crate::STASH_SIZE.0) as _,
+            bottom: (crate::STASH_POS.1 + crate::STASH_SIZE.1) as _,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct SaveData {
+    #[serde(flatten)]
+    account_data: AccountData,
+    window_size: Option<WindowRect>,
+}
+
+pub fn save_account_data(path: &std::path::Path, account: &SaveData) -> Result<()> {
+    use serde_json::to_writer;
+    use std::fs::OpenOptions;
+
+    let out_file = OpenOptions::new()
+        .truncate(true)
+        .create(true)
+        .write(true)
+        .open(path)?;
+    to_writer(out_file, account)?;
+
+    Ok(())
+}
+
+pub fn load_account_data(path: &std::path::Path) -> Result<SaveData> {
+    use serde_json::from_reader;
+    use std::fs::OpenOptions;
+    let out_file = OpenOptions::new().read(true).open(path)?;
+    from_reader(out_file).map_err(|e| anyhow!(e))
+}
+
+pub fn init_ui() -> Result<(Terminal<CrosstermBackend<Stdout>>, SaveData)> {
     enable_raw_mode().expect("Can't use raw mode");
     let mut stdout = stdout();
     execute!(stdout, EnterAlternateScreen).expect("Can't enter to alternate screen");
@@ -37,7 +85,7 @@ pub fn init_ui() -> Result<(Terminal<CrosstermBackend<Stdout>>, AccountData)> {
         .join(SAVE_FILE_NAME);
     let error;
     let data;
-    match helper::load_account_data(&save_name) {
+    match load_account_data(&save_name) {
         Ok(account) => {
             data = account;
             error = "An saved file has been loaded successfully".to_string();
@@ -127,7 +175,7 @@ enum State {
     Edit(Field),
 }
 
-enum ChaosEvent {
+pub enum ChaosEvent {
     TUIEvent(CEvent),
     Error(Result<()>),
 }
@@ -135,20 +183,16 @@ enum ChaosEvent {
 use helper;
 pub fn ui_loop<T: backend::Backend>(
     terminal: &mut Terminal<T>,
-    mut account_data: AccountData,
+    mut save_data: SaveData,
     loop_proxy: crate::EventLoopProxy<helper::ResponseFromNetwork>,
-    err_recv: std::sync::mpsc::Receiver<Result<()>>,
+    event_send: std::sync::mpsc::Sender<ChaosEvent>,
+    event_recv: std::sync::mpsc::Receiver<ChaosEvent>,
 ) -> Result<()> {
     lazy_static! {
         static ref CLIPBOARD: Mutex<clipboard::ClipboardContext> =
             Mutex::new(clipboard::ClipboardProvider::new().unwrap());
     }
 
-    let (event_send, event_recv) = std::sync::mpsc::channel();
-    {
-        let event_send = event_send.clone();
-        std::thread::spawn(move || event_send.send(ChaosEvent::Error(err_recv.recv().unwrap())));
-    }
     std::thread::spawn(move || {
         while let Ok(e) = event::read() {
             if let Err(_) = event_send.send(ChaosEvent::TUIEvent(e)) {
@@ -175,7 +219,7 @@ pub fn ui_loop<T: backend::Backend>(
                         state = State::SelectToEdit;
                     }
                     State::Show if key == 'r' => {
-                        helper::set_account(account_data.clone());
+                        helper::set_account(save_data.account_data.clone());
                         crate::IS_INITIALIZED.store(true, std::sync::atomic::Ordering::Release);
                         match helper::acquire_chaos_list(true) {
                             Ok(result) => {
@@ -186,7 +230,7 @@ pub fn ui_loop<T: backend::Backend>(
                         }
                     }
                     State::Show if key == 's' => {
-                        if let Err(e) = helper::save_account_data(&save_name, &account_data) {
+                        if let Err(e) = save_account_data(&save_name, &save_data) {
                             error = e.to_string();
                         } else {
                             error = "Save has been completed".to_string();
@@ -239,17 +283,17 @@ pub fn ui_loop<T: backend::Backend>(
                     State::Edit(f) if code == KeyCode::Enter => {
                         match f {
                             Field::Account(s) => {
-                                account_data.account = s;
+                                save_data.account_data.account = s;
                             }
                             Field::Cookie(s) => {
-                                account_data.cookie = s;
+                                save_data.account_data.cookie = s;
                             }
                             Field::League(s) => {
-                                account_data.league = s;
+                                save_data.account_data.league = s;
                             }
                             Field::TabIdx(i) => {
                                 if let Some(idx) = i {
-                                    account_data.tab_idx = idx as usize;
+                                    save_data.account_data.tab_idx = idx as usize;
                                 }
                             }
                         }
@@ -265,7 +309,7 @@ pub fn ui_loop<T: backend::Backend>(
             _ => {}
         }
         terminal.draw(|mut f| {
-            draw_ui(&mut f, &state, &account_data, league_data, &error);
+            draw_ui(&mut f, &state, &save_data, league_data, &error);
         })?;
     }
     Ok(())
@@ -274,7 +318,7 @@ pub fn ui_loop<T: backend::Backend>(
 fn draw_ui<T: backend::Backend>(
     f: &mut Frame<T>,
     state: &State,
-    account_data: &AccountData,
+    save_data: &SaveData,
     league_data: &Vec<String>,
     error: &str,
 ) {
@@ -282,9 +326,9 @@ fn draw_ui<T: backend::Backend>(
         .direction(Direction::Vertical)
         .constraints(
             [
+                Constraint::Length(3),
                 Constraint::Min(3),
-                Constraint::Ratio(3, 4),
-                Constraint::Ratio(1, 4),
+                Constraint::Length(4),
             ]
             .as_ref(),
         )
@@ -303,11 +347,11 @@ fn draw_ui<T: backend::Backend>(
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(80), Constraint::Percentage(20)].as_ref())
         .split(layout[1]);
-    let tab_idx_string = account_data.tab_idx.to_string();
+    let tab_idx_string = save_data.account_data.tab_idx.to_string();
     let data_texts: Vec<&str> = vec![
-        account_data.account.as_str(),
-        account_data.cookie.as_str(),
-        account_data.league.as_str(),
+        save_data.account_data.account.as_str(),
+        save_data.account_data.cookie.as_str(),
+        save_data.account_data.league.as_str(),
         tab_idx_string.as_str(),
     ];
     let data_labels = ["Account", "Web Cookie", "League", "Tab index"];
