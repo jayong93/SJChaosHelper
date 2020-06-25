@@ -1,9 +1,10 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use font_loader::system_fonts;
 use helper::AccountData;
 use iced::{self, widget, Color, Element};
 use iced_native::Event;
 use lazy_static::lazy_static;
+use serde::{Deserialize, Serialize};
 use std::{
     ffi::{OsStr, OsString},
     ptr::null_mut,
@@ -136,6 +137,54 @@ struct App {
     save_button_state: widget::button::State,
     font: iced::Font,
     win_status: AdjustingWindowStatus,
+    win_rect: Option<WindowRect>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Copy, Clone)]
+pub struct WindowRect {
+    pub left: i32,
+    pub top: i32,
+    pub right: i32,
+    pub bottom: i32,
+}
+
+impl Default for WindowRect {
+    fn default() -> Self {
+        Self {
+            left: crate::STASH_POS.0 as _,
+            top: crate::STASH_POS.1 as _,
+            right: (crate::STASH_POS.0 + crate::STASH_SIZE.0) as _,
+            bottom: (crate::STASH_POS.1 + crate::STASH_SIZE.1) as _,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct SaveData {
+    #[serde(flatten)]
+    account_data: AccountData,
+    window_size: Option<WindowRect>,
+}
+
+pub fn save_account_data(path: &std::path::Path, account: &SaveData) -> Result<()> {
+    use serde_json::to_writer;
+    use std::fs::OpenOptions;
+
+    let out_file = OpenOptions::new()
+        .truncate(true)
+        .create(true)
+        .write(true)
+        .open(path)?;
+    to_writer(out_file, account)?;
+
+    Ok(())
+}
+
+pub fn load_account_data(path: &std::path::Path) -> Result<SaveData> {
+    use serde_json::from_reader;
+    use std::fs::OpenOptions;
+    let out_file = OpenOptions::new().read(true).open(path)?;
+    from_reader(out_file).map_err(|e| anyhow!(e))
 }
 
 impl App {
@@ -147,7 +196,7 @@ impl iced::Application for App {
     type Message = AppMessage;
     type Executor = iced::executor::Default;
     type Flags = (
-        AccountData,
+        SaveData,
         crate::EventLoopProxy<crate::UIMessage>,
         iced::Font,
     );
@@ -157,23 +206,24 @@ impl iced::Application for App {
         let league = league_data
             .iter()
             .enumerate()
-            .find(|(_, league)| flag.0.league == **league)
+            .find(|(_, league)| flag.0.account_data.league == **league)
             .map(|(idx, _)| idx);
         let labels = [
-            EditableLabel::Text(flag.0.account.clone(), Default::default()),
-            EditableLabel::Text(flag.0.cookie.clone(), Default::default()),
-            EditableLabel::Text(flag.0.tab_idx.to_string(), Default::default()),
+            EditableLabel::Text(flag.0.account_data.account.clone(), Default::default()),
+            EditableLabel::Text(flag.0.account_data.cookie.clone(), Default::default()),
+            EditableLabel::Text(flag.0.account_data.tab_idx.to_string(), Default::default()),
         ];
         (
             Self {
                 loop_proxy: flag.1,
-                account_data: flag.0,
+                account_data: flag.0.account_data,
                 league,
                 labels,
                 start_button_state: Default::default(),
                 save_button_state: Default::default(),
                 font: flag.2,
                 win_status: AdjustingWindowStatus::None,
+                win_rect: flag.0.window_size,
             },
             Command::none(),
         )
@@ -244,7 +294,11 @@ impl iced::Application for App {
                         panic!("사용자 폴더의 위치를 불러올 수 없습니다.")
                     })
                     .join(SAVE_FILE_NAME);
-                if let Err(e) = helper::save_account_data(&save_name, &self.account_data) {
+                let save_data = SaveData {
+                    account_data: self.account_data.clone(),
+                    window_size: self.win_rect,
+                };
+                if let Err(e) = save_account_data(&save_name, &save_data) {
                     error_message_box(e);
                 }
             }
@@ -260,9 +314,21 @@ impl iced::Application for App {
                             || !modifiers.control
                             || !modifiers.shift => {}
                         KeyCode::F8 if self.win_status == AdjustingWindowStatus::LeftTop => {
+                            if let Ok((cx, cy)) = crate::get_cursor_pos() {
+                                let mut rect = self.win_rect.unwrap_or_default();
+                                rect.left = cx;
+                                rect.top = cy;
+                                self.win_rect = Some(rect);
+                            }
                             self.win_status = AdjustingWindowStatus::RightBottom;
                         }
                         KeyCode::F8 if self.win_status == AdjustingWindowStatus::RightBottom => {
+                            if let Ok((cx, cy)) = crate::get_cursor_pos() {
+                                let mut rect = self.win_rect.unwrap_or_default();
+                                rect.right = cx;
+                                rect.bottom = cy;
+                                self.win_rect = Some(rect);
+                            }
                             self.win_status = AdjustingWindowStatus::None;
                         }
                         KeyCode::F8 => {
@@ -387,9 +453,15 @@ pub fn run_ui(loop_proxy: crate::EventLoopProxy<crate::UIMessage>) -> Result<()>
             panic!("사용자 폴더의 위치를 불러올 수 없습니다.")
         })
         .join(SAVE_FILE_NAME);
-    let account = helper::load_account_data(&save_name)
+    let save_data = load_account_data(&save_name)
         .map_err(|e| error_message_box(e))
         .unwrap_or_default();
+
+    loop_proxy
+        .send_event(crate::UIMessage::InitWindow(
+            save_data.window_size.unwrap_or_default(),
+        ))
+        .unwrap();
 
     let mut font_property = system_fonts::FontPropertyBuilder::new()
         .family("맑은 고딕")
@@ -405,6 +477,6 @@ pub fn run_ui(loop_proxy: crate::EventLoopProxy<crate::UIMessage>) -> Result<()>
         iced::Font::Default
     };
 
-    App::run(iced::Settings::with_flags((account, loop_proxy, font)));
+    App::run(iced::Settings::with_flags((save_data, loop_proxy, font)));
     Ok(())
 }
