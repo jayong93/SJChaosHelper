@@ -37,6 +37,15 @@ pub fn error_message_box(s: impl ToString) {
     });
 }
 
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+struct LeagueIdx(usize);
+
+impl ToString for LeagueIdx {
+    fn to_string(&self) -> String {
+        LEAGUE_DATA[self.0].clone()
+    }
+}
+
 #[derive(Clone, Debug)]
 enum AppMessage {
     LabelUpdateStarted(usize),
@@ -59,7 +68,7 @@ struct Bordered;
 impl widget::container::StyleSheet for Bordered {
     fn style(&self) -> widget::container::Style {
         widget::container::Style {
-            border_width: 2,
+            border_width: 2.,
             border_color: Color::from_rgb(0.5, 0.5, 0.5),
             ..Default::default()
         }
@@ -132,6 +141,7 @@ struct App {
     loop_proxy: crate::EventLoopProxy<crate::UIMessage>,
     account_data: AccountData,
     league: Option<usize>,
+    league_picklist_state: widget::pick_list::State<LeagueIdx>,
     labels: [EditableLabel; 3],
     start_button_state: widget::button::State,
     save_button_state: widget::button::State,
@@ -218,6 +228,7 @@ impl iced::Application for App {
                 loop_proxy: flag.1,
                 account_data: flag.0.account_data,
                 league,
+                league_picklist_state: Default::default(),
                 labels,
                 start_button_state: Default::default(),
                 save_button_state: Default::default(),
@@ -384,25 +395,24 @@ impl iced::Application for App {
         let font = self.font;
 
         let radio_row = Row::new()
+            .padding(20)
             .spacing(20)
             .align_items(Align::Center)
+            .width(Length::Fill)
             .push(Text::new("League").font(font));
 
         let league_data = &LEAGUE_DATA;
-        let selected_league = self
-            .league
-            .map(|selected_idx| league_data[selected_idx].as_str());
-        let radio_row = league_data
-            .iter()
-            .enumerate()
-            .fold(radio_row, |row, (idx, league)| {
-                row.push(Radio::new(
-                    league.as_str(),
-                    league,
-                    selected_league,
-                    move |_| AppMessage::LeagueUpdated(idx),
-                ))
-            });
+        let selected_league = self.league.map(|selected_idx| LeagueIdx(selected_idx));
+        let league_indices: Vec<_> = (0..league_data.len()).map(|idx| LeagueIdx(idx)).collect();
+        let radio_row = radio_row.push(
+            PickList::new(
+                &mut self.league_picklist_state,
+                league_indices,
+                selected_league,
+                |idx| AppMessage::LeagueUpdated(idx.0),
+            )
+            .width(Length::Fill),
+        );
 
         let column = Column::new().spacing(20).align_items(Align::Center);
         let column = column.push(radio_row);
@@ -477,6 +487,6 @@ pub fn run_ui(loop_proxy: crate::EventLoopProxy<crate::UIMessage>) -> Result<()>
         iced::Font::Default
     };
 
-    App::run(iced::Settings::with_flags((save_data, loop_proxy, font)));
+    App::run(iced::Settings::with_flags((save_data, loop_proxy, font))).unwrap();
     Ok(())
 }
